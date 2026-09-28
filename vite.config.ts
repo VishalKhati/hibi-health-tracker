@@ -1,0 +1,55 @@
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
+
+// Deploying under a sub-path (e.g. https://example.com/hibi/)? Build with HIBI_BASE=/hibi/.
+// Everything below is relative, so the manifest, icons, and service worker follow the base.
+const base = process.env.HIBI_BASE ?? '/'
+
+export default defineConfig({
+  base,
+  plugins: [
+    vue(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icons/*.png'],
+      manifest: {
+        id: base,
+        name: 'Hibi — Daily Health',
+        short_name: 'Hibi',
+        description: 'A calm, private daily health tracker for food, movement, body, and routines.',
+        lang: 'en',
+        dir: 'ltr',
+        theme_color: '#152a23',
+        background_color: '#f5f3ed',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: './',
+        scope: './',
+        categories: ['health', 'fitness', 'lifestyle'],
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icons/maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        ],
+        // Long-press the home-screen icon (Android) or right-click it (desktop) to jump straight in.
+        shortcuts: [
+          { name: 'Log food', short_name: 'Food', url: './?action=log-food', icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Log weight', short_name: 'Weight', url: './?action=log-weight', icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
+        ],
+        // Chrome shows these in a richer install dialog instead of the plain "Install app?" sheet.
+        screenshots: [
+          { src: 'screenshots/today-phone.png', sizes: '780x1688', type: 'image/png', form_factor: 'narrow', label: 'Today at a glance' },
+          { src: 'screenshots/progress-phone.png', sizes: '780x1688', type: 'image/png', form_factor: 'narrow', label: 'Streaks and progress' },
+          { src: 'screenshots/body-desktop.png', sizes: '1440x900', type: 'image/png', form_factor: 'wide', label: 'Weight trend, BMI, and calorie needs' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        navigateFallback: 'index.html',
+      },
+    }),
+  ],
+})
