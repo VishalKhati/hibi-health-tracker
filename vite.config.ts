@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -5,12 +6,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Deploying under a sub-path (e.g. https://example.com/hibi/)? Build with HIBI_BASE=/hibi/.
 // Everything below is relative, so the manifest, icons, and service worker follow the base.
 const base = process.env.HIBI_BASE ?? '/'
-// Netlify sets COMMIT_REF during builds; shown in Settings so it's easy to tell which version a phone runs.
-const version = `${process.env.COMMIT_REF?.slice(0, 7) ?? 'local'} · ${new Date().toISOString().slice(0, 10)}`
+// Release name from package.json (2.1.0 → v2.1, 2.1.3 → v2.1.3). Bump it with `npm version minor`
+// or `npm version patch`. The commit id is kept as a build detail for telling deploys apart.
+const { version: pkgVersion } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+const version = `v${pkgVersion.replace(/\.0$/, '')}`
+const build = `${process.env.COMMIT_REF?.slice(0, 7) ?? 'local'} · ${new Date().toISOString().slice(0, 10)}`
 
 export default defineConfig({
   base,
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), __APP_BUILD__: JSON.stringify(build) },
   plugins: [
     vue(),
     VitePWA({

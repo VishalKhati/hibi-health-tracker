@@ -8,6 +8,7 @@ import { applyUpdate, checkForUpdates, checkState, updateReady } from '../servic
 
 const store = useHealthStore()
 const appVersion = __APP_VERSION__
+const appBuild = __APP_BUILD__
 const checkMessages = {
   idle: '',
   checking: '',
@@ -76,7 +77,7 @@ const upload = async (event: Event) => {
       </article>
       <article class="panel about-card">
         <div class="brand-mark small">日</div>
-        <div class="about-copy"><h2>Hibi <span>version {{ appVersion }}</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p><p v-if="checkMessages[checkState]" class="update-status" role="status">{{ checkMessages[checkState] }}</p></div>
+        <div class="about-copy"><h2>Hibi <span :title="`Build ${appBuild}`">{{ appVersion }}</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p><p v-if="checkMessages[checkState]" class="update-status" role="status">{{ checkMessages[checkState] }}</p></div>
         <button v-if="updateReady" class="primary-button" type="button" @click="applyUpdate"><RefreshCw :size="16" /> Update now</button>
         <button v-else class="secondary-button" type="button" :disabled="checkState === 'checking'" @click="checkForUpdates"><LoaderCircle v-if="checkState === 'checking'" :size="16" class="spin" /><RefreshCw v-else :size="16" /> Check for updates</button>
       </article>
