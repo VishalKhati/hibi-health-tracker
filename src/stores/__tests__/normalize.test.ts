@@ -19,8 +19,15 @@ describe('normalize', () => {
     expect(data.profile.goals.calories).toBe(2000)
     expect(data.profile.body).toEqual({ activityLevel: 'light' })
     expect(data.preferences.theme).toBe('system')
+    expect(data.preferences.reminders).toEqual({ water: { enabled: false, start: '09:00', end: '21:00', everyMinutes: 120 }, supplements: false })
     expect(data.weights).toEqual([])
     expect(data.foods).toHaveLength(1)
+  })
+
+  it('keeps saved reminder choices and fills new reminder fields', () => {
+    const data = normalize({ ...v1Backup, preferences: { theme: 'dark', reminders: { supplements: true, water: { enabled: true } } } })
+    expect(data.preferences.theme).toBe('dark')
+    expect(data.preferences.reminders).toEqual({ supplements: true, water: { enabled: true, start: '09:00', end: '21:00', everyMinutes: 120 } })
   })
 
   it('drops keys that are not part of the data model', () => {

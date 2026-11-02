@@ -15,6 +15,7 @@ import LogWeightModal from './components/LogWeightModal.vue'
 import BaseModal from './components/BaseModal.vue'
 import type { FoodEntry, Screen } from './types'
 import { useHealthStore } from './stores/health'
+import { useReminders } from './services/reminders'
 
 const store = useHealthStore()
 const active = ref<Screen>('today')
@@ -60,20 +61,39 @@ const openDate = (date: string) => {
 }
 const saved = (message: string) => {
   modal.value = null
-  toast.value = message
-  window.setTimeout(() => toast.value = '', 2200)
+  showToast(message)
 }
 
-// Home-screen shortcuts from the manifest open the app with ?action=…
+// Home-screen shortcuts and notification buttons open the app with ?action=… or ?screen=…
+const showToast = (message: string) => {
+  toast.value = message
+  window.setTimeout(() => toast.value = '', 2600)
+}
 onMounted(() => {
   const url = new URL(window.location.href)
   const action = url.searchParams.get('action')
-  if (!action) return
+  const screen = url.searchParams.get('screen')
+  if (!action && !screen) return
+  if (screen === 'supplements') go('supplements')
   if (action === 'log-food') openFood()
   else if (action === 'log-weight') { go('body'); modal.value = 'weight' }
+  else if (action === 'add-water') {
+    store.setDayValue('water', store.todayTotals.value.water + 1)
+    showToast(`Water logged · ${store.todayTotals.value.water} of ${store.data.profile.goals.water} glasses`)
+  } else if (action === 'take-supplement') {
+    const supplement = store.data.supplements.find((item) => item.id === url.searchParams.get('id'))
+    if (supplement) {
+      store.logDose(supplement.id, 'taken')
+      go('supplements')
+      showToast(`${supplement.name} marked as taken`)
+    }
+  }
   url.searchParams.delete('action')
+  url.searchParams.delete('screen')
+  url.searchParams.delete('id')
   window.history.replaceState(null, '', url)
 })
+useReminders().startSync()
 
 // "system" leaves the attribute off so the prefers-color-scheme media query decides.
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)')

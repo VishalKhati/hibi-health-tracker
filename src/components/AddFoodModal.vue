@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ArrowLeft, BookmarkPlus, LoaderCircle, Plus, ScanBarcode, Search } from 'lucide-vue-next'
 import BaseModal from './BaseModal.vue'
 import BarcodeScanner from './BarcodeScanner.vue'
+import PhotoMeal from './PhotoMeal.vue'
 import { useHealthStore } from '../stores/health'
 import { FoodLookupError, lookupBarcode, nutritionFor, searchFoods, type FoodProduct } from '../services/openFoodFacts'
 import type { FoodEntry } from '../types'
@@ -10,7 +11,7 @@ import type { FoodEntry } from '../types'
 const props = withDefaults(defineProps<{ initialMeal?: FoodEntry['meal'] }>(), { initialMeal: 'Breakfast' })
 const emit = defineEmits<{ close: []; saved: [] }>()
 const store = useHealthStore()
-const mode = ref<'saved' | 'search' | 'custom'>('saved')
+const mode = ref<'saved' | 'search' | 'photo' | 'custom'>('saved')
 const meal = ref<FoodEntry['meal']>(props.initialMeal)
 const form = reactive({ name: '', portion: '', calories: 0, protein: 0, save: true })
 
@@ -94,7 +95,8 @@ const addProduct = () => {
     <div class="segmented" role="tablist">
       <button role="tab" :aria-selected="mode === 'saved'" :class="{ active: mode === 'saved' }" @click="mode = 'saved'">Saved</button>
       <button role="tab" :aria-selected="mode === 'search'" :class="{ active: mode === 'search' }" @click="mode = 'search'">Search</button>
-      <button role="tab" :aria-selected="mode === 'custom'" :class="{ active: mode === 'custom' }" @click="mode = 'custom'">New food</button>
+      <button role="tab" :aria-selected="mode === 'photo'" :class="{ active: mode === 'photo' }" @click="mode = 'photo'">Photo</button>
+      <button role="tab" :aria-selected="mode === 'custom'" :class="{ active: mode === 'custom' }" @click="mode = 'custom'">New</button>
     </div>
     <label class="field"><span>Meal</span><select v-model="meal"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option></select></label>
 
@@ -150,6 +152,8 @@ const addProduct = () => {
         <p class="data-credit">Food data from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, shared under the ODbL. Values are per the product label.</p>
       </template>
     </div>
+
+    <PhotoMeal v-else-if="mode === 'photo'" :meal="meal" @saved="emit('saved')" />
 
     <form v-else class="form-stack" @submit.prevent="submit">
       <label class="field"><span>Food or meal</span><input v-model="form.name" required placeholder="e.g. Paneer rice bowl" autofocus /></label>

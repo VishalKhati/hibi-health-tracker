@@ -6,12 +6,14 @@ Hibi (日々) is a private, offline-first health tracker designed for quick dail
 
 - Today dashboard for calories, protein, steps, water, movement, and supplements
 - Food logging with reusable saved foods and meal grouping
+- Photo calorie estimates: snap a meal, Claude identifies each food and estimates grams, calories and protein, and you review and edit every item before it's logged
 - Food search and barcode scanning backed by [Open Food Facts](https://world.openfoodfacts.org), with portion sizes in grams or labelled servings
 - Walk, run, gym, and custom activity logs, with calories burned estimated from body weight and pace when left blank
 - Supplement schedules with taken/skipped states
 - Body screen: weight log, weight trend chart with a 7-day moving average, BMI, and daily calorie needs
 - Suggested calorie, protein, and water goals from your body profile
 - Seven-day totals, averages, and consistency, plus streaks and a monthly goals calendar
+- Push reminders for water (at an interval you choose) and for each supplement at its scheduled time, with **+1 glass** and **Taken** buttons on the notification
 - Light, dark, and system themes
 - JSON backup export and import (older backups are upgraded on import)
 - Offline app shell and home-screen installation
@@ -49,13 +51,44 @@ npm run dev
 
 Open the local address shown by Vite. On a phone, use the browser's **Add to Home Screen** or **Install app** action.
 
+## Server functions
+
+Hibi is still a static, offline-first app; three small Netlify Functions add the online features:
+
+| Function | Route | Purpose |
+| --- | --- | --- |
+| `analyze-meal` | `POST /api/analyze-meal` | Sends a resized meal photo to Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Requires the access code; capped per day. |
+| `reminders` | `GET/PUT/DELETE /api/reminders` | Stores a device's push subscription, time zone and reminder schedule in Netlify Blobs. |
+| `send-reminders` | scheduled, every 5 minutes | Sends reminders that fell due since the last run, in each device's own time zone. |
+
+Only reminder times and supplement names are stored server-side. Food logs, weights and everything else stay on the device. Photos are not stored.
+
+### Configuration
+
+Run once after linking the repo to a Netlify site (`npx netlify-cli login`, `npx netlify-cli link`):
+
+```bash
+npm run setup:netlify
+```
+
+It generates push (VAPID) keys and an access code, asks for an Anthropic API key with hidden input, saves them as Netlify environment variables, and starts a fresh deploy.
+
+| Variable | Used for |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | Photo estimates |
+| `HIBI_ACCESS_CODE` | Required by the app to request photo estimates, so the public site can't spend your API credit |
+| `HIBI_DAILY_PHOTO_LIMIT` | Optional, default 60 per day |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Signing push notifications |
+
+Push notifications work in Chrome/Edge/Firefox and, on iPhone, once Hibi is added to the Home Screen (iOS 16.4+).
+
 ## Tests
 
 ```bash
 npm test
 ```
 
-Unit tests cover the health formulas, streaks, date helpers, backup validation, and the Open Food Facts client.
+Unit tests cover the health formulas, streaks, date helpers, backup validation, the Open Food Facts client, the reminder scheduler (time zones, DST, lookback cap), and the server functions with in-memory Blobs.
 
 ## Production build
 
@@ -85,7 +118,7 @@ The manifest ships PNG icons (192/512, plus maskable variants), an Apple touch i
 
 ## Data and privacy
 
-Hibi stores entries in browser local storage. Nothing is sent to a server except food search and barcode lookups, which go to Open Food Facts. Browser data can be cleared by the operating system or user, so the Settings screen provides backup export/import from the first release.
+Hibi stores entries in browser local storage. Only these leave the device: food search and barcode lookups (Open Food Facts), meal photos you choose to analyze (sent to Claude through the `analyze-meal` function, not stored), and reminder schedules if you turn reminders on. Browser data can be cleared by the operating system or user, so the Settings screen provides backup export/import from the first release.
 
 ## Later Android path
 

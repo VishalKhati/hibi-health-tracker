@@ -1,3 +1,5 @@
+import type { ReminderSettings } from '../shared/reminders'
+
 export type Screen = 'today' | 'food' | 'activity' | 'supplements' | 'body' | 'progress' | 'settings'
 
 export interface FoodEntry {
@@ -89,8 +91,11 @@ export interface UserProfile {
 
 export type Theme = 'system' | 'light' | 'dark'
 
+export type { ReminderSettings }
+
 export interface Preferences {
   theme: Theme
+  reminders: ReminderSettings
 }
 
 export interface HibiData {

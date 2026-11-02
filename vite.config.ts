@@ -12,7 +12,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icons/*.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icons/*.png', 'push-sw.js'],
       manifest: {
         id: base,
         name: 'Hibi — Daily Health',
@@ -49,6 +49,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         navigateFallback: 'index.html',
+        // Server functions answer under /api; never serve the app shell for them.
+        navigateFallbackDenylist: [/^\/api\//],
+        // Push and notification-click handlers for reminders.
+        importScripts: ['push-sw.js'],
       },
     }),
   ],

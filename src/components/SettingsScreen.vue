@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { Check, Database, Download, Info, Monitor, Moon, Palette, RotateCcw, Sun, Upload } from 'lucide-vue-next'
 import { useHealthStore } from '../stores/health'
 import InstallPrompt from './InstallPrompt.vue'
+import RemindersCard from './RemindersCard.vue'
 
 const store = useHealthStore()
 const themes = [
@@ -57,6 +58,7 @@ const upload = async (event: Event) => {
         </div>
       </article>
       <InstallPrompt variant="card" />
+      <RemindersCard />
       <article class="panel settings-card">
         <div class="settings-heading"><span class="settings-icon peach"><Database :size="20" /></span><div><h2>Your data</h2><p>Keep a copy somewhere safe.</p></div></div>
         <div class="backup-actions"><button class="secondary-button" @click="download"><Download :size="18" /> Export backup</button><button class="secondary-button" @click="fileInput?.click()"><Upload :size="18" /> Import backup</button><input ref="fileInput" hidden type="file" accept="application/json,.json" @change="upload" /></div>
