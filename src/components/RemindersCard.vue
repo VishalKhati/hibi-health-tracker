@@ -17,6 +17,7 @@ const supplementTimes = computed(() => [...new Set(store.data.supplements.map((i
 
     <p v-if="status === 'unsupported'" class="privacy-note">This browser can’t receive push notifications. Use Chrome on Android, or Safari on iPhone with Hibi added to the Home Screen.</p>
     <p v-else-if="status === 'needs-install'" class="privacy-note">On iPhone, reminders work once Hibi is on your Home Screen: in Safari tap Share, then “Add to Home Screen”, and open Hibi from there.</p>
+    <p v-else-if="status === 'server-off'" class="privacy-note"><span>Reminders aren’t switched on for this Hibi server yet, so this device can’t subscribe. If you run this Hibi, finish the server setup (<code>npm run setup:netlify</code>); otherwise ask the person who shared it with you.</span></p>
     <p v-else-if="status === 'blocked'" class="privacy-note">Notifications are blocked for Hibi. Allow them in your browser or phone settings, then come back here.</p>
 
     <div v-else class="form-stack">

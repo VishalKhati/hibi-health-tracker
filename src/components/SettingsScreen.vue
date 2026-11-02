@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Check, Database, Download, Info, Monitor, Moon, Palette, RotateCcw, Sun, Upload } from 'lucide-vue-next'
+import { Check, Database, Download, Info, LoaderCircle, Monitor, Moon, Palette, RefreshCw, RotateCcw, Sun, Upload } from 'lucide-vue-next'
 import { useHealthStore } from '../stores/health'
 import InstallPrompt from './InstallPrompt.vue'
 import RemindersCard from './RemindersCard.vue'
+import { applyUpdate, checkForUpdates, checkState, updateReady } from '../services/appUpdate'
 
 const store = useHealthStore()
 const appVersion = __APP_VERSION__
+const checkMessages = {
+  idle: '',
+  checking: '',
+  latest: 'You have the latest version.',
+  offline: 'Couldn’t check. Are you online?',
+  unavailable: 'Updates are checked in the installed app.',
+} as const
 const themes = [
   { id: 'system', label: 'System', icon: Monitor },
   { id: 'light', label: 'Light', icon: Sun },
@@ -66,7 +74,12 @@ const upload = async (event: Event) => {
         <p class="privacy-note"><Info :size="16" /> Hibi is offline-first. Clearing browser data can remove your entries, so export a backup regularly.</p>
         <p v-if="message" class="success-message"><Check :size="16" /> {{ message }}</p>
       </article>
-      <article class="panel about-card"><div class="brand-mark small">日</div><div><h2>Hibi <span>version {{ appVersion }}</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p></div></article>
+      <article class="panel about-card">
+        <div class="brand-mark small">日</div>
+        <div class="about-copy"><h2>Hibi <span>version {{ appVersion }}</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p><p v-if="checkMessages[checkState]" class="update-status" role="status">{{ checkMessages[checkState] }}</p></div>
+        <button v-if="updateReady" class="primary-button" type="button" @click="applyUpdate"><RefreshCw :size="16" /> Update now</button>
+        <button v-else class="secondary-button" type="button" :disabled="checkState === 'checking'" @click="checkForUpdates"><LoaderCircle v-if="checkState === 'checking'" :size="16" class="spin" /><RefreshCw v-else :size="16" /> Check for updates</button>
+      </article>
     </section>
   </div>
 </template>

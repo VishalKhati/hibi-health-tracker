@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
-import { Activity, BarChart3, CalendarDays, ChevronRight, Ellipsis, Pill, Salad, Scale, Settings, Sparkles } from 'lucide-vue-next'
+import { Activity, BarChart3, CalendarDays, ChevronRight, Ellipsis, Pill, RefreshCw, Salad, Scale, Settings, Sparkles } from 'lucide-vue-next'
 import TodayScreen from './components/TodayScreen.vue'
 import FoodScreen from './components/FoodScreen.vue'
 import ActivityScreen from './components/ActivityScreen.vue'
@@ -16,6 +16,7 @@ import BaseModal from './components/BaseModal.vue'
 import type { FoodEntry, Screen } from './types'
 import { useHealthStore } from './stores/health'
 import { useReminders } from './services/reminders'
+import { applyUpdate, updateReady } from './services/appUpdate'
 
 const store = useHealthStore()
 const active = ref<Screen>('today')
@@ -147,5 +148,11 @@ watchEffect(() => {
       </BaseModal>
     </Transition>
     <Transition name="toast"><div v-if="toast" class="toast" role="status"><span>✓</span>{{ toast }}</div></Transition>
+    <Transition name="toast">
+      <div v-if="updateReady && !toast" class="toast update-toast" role="status">
+        <RefreshCw :size="15" /> New version of Hibi ready
+        <button type="button" @click="applyUpdate">Update</button>
+      </div>
+    </Transition>
   </div>
 </template>

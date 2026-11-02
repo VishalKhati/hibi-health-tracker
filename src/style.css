@@ -586,6 +586,8 @@ button:disabled { opacity: .36; cursor: default; }
 
 .bottom-nav { display: none; }
 .toast { position: fixed; z-index: 120; left: calc(50% + 115px); bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; padding: 11px 16px; color: white; border-radius: 12px; background: #1c3b31; box-shadow: 0 12px 30px rgba(23,54,45,.2); font-size: 11px; font-weight: 600; }
+.update-toast { padding: 8px 8px 8px 14px; white-space: nowrap; }.update-toast button { margin-left: 6px; padding: 7px 13px; border: 0; border-radius: 9px; color: #17362d; background: #bcd3c4; font: inherit; font-weight: 700; cursor: pointer; }
+.about-copy { flex: 1; min-width: 0; }.about-card > button { flex: 0 0 auto; }.update-status { color: var(--ink) !important; font-weight: 600; }
 .toast span { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; color: #315347; background: #bcd3c4; }
 .screen-enter-active, .screen-leave-active { transition: .18s ease; }.screen-enter-from { opacity: 0; transform: translateY(5px); }.screen-leave-to { opacity: 0; transform: translateY(-3px); }
 .modal-enter-active, .modal-leave-active { transition: opacity .2s ease; }.modal-enter-active .modal-sheet, .modal-leave-active .modal-sheet { transition: transform .24s ease, opacity .2s ease; }.modal-enter-from, .modal-leave-to { opacity: 0; }.modal-enter-from .modal-sheet, .modal-leave-to .modal-sheet { opacity: 0; transform: translateY(16px) scale(.98); }
@@ -641,6 +643,7 @@ button:disabled { opacity: .36; cursor: default; }
   .modal-header { margin-bottom: 18px; }
   .modal-enter-from .modal-sheet, .modal-leave-to .modal-sheet { transform: translateY(100%); }
   .toast { left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .about-card { flex-wrap: wrap; }.about-card > button { width: 100%; justify-content: center; }
 }
 
 @media (max-width: 390px) {

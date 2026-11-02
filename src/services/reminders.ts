@@ -2,7 +2,7 @@ import { ref, watch } from 'vue'
 import type { ReminderSync } from '../shared/reminders'
 import { useHealthStore } from '../stores/health'
 
-export type ReminderStatus = 'checking' | 'unsupported' | 'needs-install' | 'blocked' | 'off' | 'on'
+export type ReminderStatus = 'checking' | 'unsupported' | 'needs-install' | 'blocked' | 'server-off' | 'off' | 'on'
 
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
@@ -68,6 +68,9 @@ export const useReminders = () => {
     const supported = support()
     if (supported !== 'ok') { status.value = supported; return }
     if (Notification.permission === 'denied') { status.value = 'blocked'; return }
+    // 503 means the server has no push keys yet; other failures (offline) shouldn't hide the switch.
+    const server = await fetch('/api/reminders').then((response) => response.status).catch(() => 0)
+    if (server === 503) { status.value = 'server-off'; return }
     const reg = await navigator.serviceWorker.getRegistration()
     subscription = (await reg?.pushManager.getSubscription()) ?? null
     status.value = subscription && Notification.permission === 'granted' ? 'on' : 'off'
