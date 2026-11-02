@@ -6,7 +6,7 @@ Hibi (日々) is a private, offline-first health tracker designed for quick dail
 
 - Today dashboard for calories, protein, steps, water, movement, and supplements
 - Food logging with reusable saved foods and meal grouping
-- Photo calorie estimates: snap a meal, Claude identifies each food and estimates grams, calories and protein, and you review and edit every item before it's logged
+- Photo calorie estimates: snap a meal, an AI model (Google Gemini's free tier by default, or Claude) identifies each food and estimates grams, calories and protein, and you review and edit every item before it's logged
 - Food search and barcode scanning backed by [Open Food Facts](https://world.openfoodfacts.org), with portion sizes in grams or labelled servings
 - Walk, run, gym, and custom activity logs, with calories burned estimated from body weight and pace when left blank
 - Supplement schedules with taken/skipped states
@@ -57,7 +57,7 @@ Hibi is still a static, offline-first app; three small Netlify Functions add the
 
 | Function | Route | Purpose |
 | --- | --- | --- |
-| `analyze-meal` | `POST /api/analyze-meal` | Sends a resized meal photo to Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Requires the access code; capped per day. |
+| `analyze-meal` | `GET/POST /api/analyze-meal` | Sends a resized meal photo to Gemini (`gemini-3.8-flash`, JSON-schema output) or Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Requires an access code; capped per code per day. `GET` reports which service is configured so the app can tell users where photos go. |
 | `reminders` | `GET/PUT/DELETE /api/reminders` | Stores a device's push subscription, time zone and reminder schedule in Netlify Blobs. |
 | `send-reminders` | scheduled, every 5 minutes | Sends reminders that fell due since the last run, in each device's own time zone. |
 
@@ -71,13 +71,23 @@ Run once after linking the repo to a Netlify site (`npx netlify-cli login`, `npx
 npm run setup:netlify
 ```
 
-It generates push (VAPID) keys and an access code, asks for an Anthropic API key with hidden input, saves them as Netlify environment variables, and starts a fresh deploy.
+It generates push (VAPID) keys and an access code (keeping existing ones on re-runs), asks for a Gemini API key and optionally an Anthropic key with hidden input, saves them as Netlify environment variables, and starts a fresh deploy.
+
+To let a friend use photo estimates, give them the site link and their own code:
+
+```bash
+npm run access-code:add
+```
+
+Each code has its own daily limit. To revoke one, remove it from `HIBI_ACCESS_CODE` in the Netlify dashboard. Everyone's food logs stay on their own device; reminders work for anyone without a code.
 
 | Variable | Used for |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Photo estimates |
-| `HIBI_ACCESS_CODE` | Required by the app to request photo estimates, so the public site can't spend your API credit |
-| `HIBI_DAILY_PHOTO_LIMIT` | Optional, default 60 per day |
+| `GEMINI_API_KEY` | Photo estimates with Gemini (free tier from Google AI Studio; Google may use free-tier content to improve its products, which the app discloses) |
+| `GEMINI_MODEL` | Optional, default `gemini-3.8-flash` |
+| `ANTHROPIC_API_KEY` | Optional paid alternative; used when no Gemini key is set |
+| `HIBI_ACCESS_CODE` | Comma-separated access codes required to request photo estimates, so the public site can't use up your quota |
+| `HIBI_DAILY_PHOTO_LIMIT` | Optional, default 40 per access code per day |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Signing push notifications |
 
 Push notifications work in Chrome/Edge/Firefox and, on iPhone, once Hibi is added to the Home Screen (iOS 16.4+).

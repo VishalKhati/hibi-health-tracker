@@ -34,6 +34,19 @@ export const prepareImage = async (file: File) => {
   return { previewUrl: dataUrl, base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mediaType: 'image/jpeg' as const }
 }
 
+export type PhotoProvider = 'gemini' | 'claude' | 'mock' | null
+
+/** Which AI service the server uses, so the app can say where photos go before one is sent. */
+export const getPhotoProvider = async (): Promise<PhotoProvider | 'unknown'> => {
+  try {
+    const response = await fetch('/api/analyze-meal', { headers: { accept: 'application/json' } })
+    if (!response.ok) return 'unknown'
+    return ((await response.json()) as { provider: PhotoProvider }).provider
+  } catch {
+    return 'unknown'
+  }
+}
+
 export const analyzeMeal = async (request: AnalyzeMealRequest, signal?: AbortSignal): Promise<MealAnalysis> => {
   if (!navigator.onLine) throw new MealPhotoError('You’re offline. Photo estimates need an internet connection.')
   const code = getAccessCode()

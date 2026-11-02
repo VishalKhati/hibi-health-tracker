@@ -6,6 +6,7 @@ import InstallPrompt from './InstallPrompt.vue'
 import RemindersCard from './RemindersCard.vue'
 
 const store = useHealthStore()
+const appVersion = __APP_VERSION__
 const themes = [
   { id: 'system', label: 'System', icon: Monitor },
   { id: 'light', label: 'Light', icon: Sun },
@@ -65,7 +66,7 @@ const upload = async (event: Event) => {
         <p class="privacy-note"><Info :size="16" /> Hibi is offline-first. Clearing browser data can remove your entries, so export a backup regularly.</p>
         <p v-if="message" class="success-message"><Check :size="16" /> {{ message }}</p>
       </article>
-      <article class="panel about-card"><div class="brand-mark small">日</div><div><h2>Hibi <span>v1.0</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p></div></article>
+      <article class="panel about-card"><div class="brand-mark small">日</div><div><h2>Hibi <span>version {{ appVersion }}</span></h2><p>日々 — “day by day.” A private little place for the choices that add up.</p></div></article>
     </section>
   </div>
 </template>

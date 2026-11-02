@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
 # One-time setup of the server-side settings for photo estimates and reminders.
-# Run from anywhere after `npx netlify-cli login` and `npx netlify-cli link` in this repo.
+# Safe to re-run: existing push keys and access codes are kept.
+# Needs `npx netlify-cli login` and `npx netlify-cli link` in this repo first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-
-netlify() { npx -y netlify-cli@latest "$@" 2> >(grep -v -E 'ExperimentalWarning|trace-warnings' >&2); }
-
-# Secret values are a paid-plan feature on some Netlify accounts; fall back to a normal value.
-set_secret() {
-  netlify env:set "$1" "$2" --secret >/dev/null 2>&1 || netlify env:set "$1" "$2" >/dev/null
-  echo "  ✓ $1"
-}
+source scripts/lib-netlify.sh
 
 echo "Setting Hibi's server settings on the linked Netlify site…"
 
 # Push keys identify this server to browsers. Regenerating them would silently break every
 # device's existing reminder subscription, so only create them once.
-if netlify env:get VAPID_PUBLIC_KEY 2>/dev/null | grep -q '^B'; then
+if [ -n "$(get_env VAPID_PUBLIC_KEY)" ]; then
   echo "  • Push keys already set; keeping them"
 else
   keys=$(npx -y web-push generate-vapid-keys --json)
@@ -25,18 +19,24 @@ else
   set_secret VAPID_PRIVATE_KEY "$(node -e 'console.log(JSON.parse(process.argv[1]).privateKey)' "$keys")"
 fi
 
-code=$(node -e "const a='abcdefghjkmnpqrstuvwxyz23456789',r=require('crypto').randomBytes(12);console.log([0,4,8].map(i=>[...r.subarray(i,i+4)].map(b=>a[b%a.length]).join('')).join('-'))")
-set_secret HIBI_ACCESS_CODE "$code"
+codes=$(get_env HIBI_ACCESS_CODE)
+if [ -z "$codes" ]; then
+  codes=$(new_code)
+  netlify env:set HIBI_ACCESS_CODE "$codes" >/dev/null
+  echo "  ✓ HIBI_ACCESS_CODE"
+else
+  echo "  • Access code already set; keeping it"
+fi
 
-read -rsp "Paste your Anthropic API key for photo estimates (input hidden; Enter to skip): " key
+read -rsp "Paste your Gemini API key from aistudio.google.com (input hidden; Enter to skip): " gemini
 echo
-if [ -n "$key" ]; then set_secret ANTHROPIC_API_KEY "$key"; else echo "  • Skipped the Anthropic key; photo estimates stay off until you add it"; fi
+if [ -n "$gemini" ]; then set_secret GEMINI_API_KEY "$gemini"; fi
 
-# Functions only see new environment variables after a fresh deploy.
-site_id=$(node -e "console.log(require('./.netlify/state.json').siteId)")
-netlify api createSiteBuild --data "{\"site_id\":\"$site_id\"}" >/dev/null
-echo "  ✓ Started a fresh deploy (about a minute)"
-
+read -rsp "Optional: paste an Anthropic API key to use Claude instead when no Gemini key is set (Enter to skip): " anthropic
 echo
-echo "Your photo-estimate access code: $code"
-echo "Enter it once on each device under Log food → Photo."
+if [ -n "$anthropic" ]; then set_secret ANTHROPIC_API_KEY "$anthropic"; fi
+
+redeploy
+echo
+echo "Access code(s) for photo estimates: $codes"
+echo "Enter one once on each device under Log food → Photo. Add one per friend with: npm run access-code:add"

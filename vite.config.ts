@@ -5,9 +5,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Deploying under a sub-path (e.g. https://example.com/hibi/)? Build with HIBI_BASE=/hibi/.
 // Everything below is relative, so the manifest, icons, and service worker follow the base.
 const base = process.env.HIBI_BASE ?? '/'
+// Netlify sets COMMIT_REF during builds; shown in Settings so it's easy to tell which version a phone runs.
+const version = `${process.env.COMMIT_REF?.slice(0, 7) ?? 'local'} · ${new Date().toISOString().slice(0, 10)}`
 
 export default defineConfig({
   base,
+  define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
     vue(),
     VitePWA({

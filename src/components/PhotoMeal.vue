@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Camera, Image as ImageIcon, KeyRound, LoaderCircle, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-vue-next'
 import { useHealthStore } from '../stores/health'
-import { analyzeMeal, getAccessCode, MealPhotoError, prepareImage, setAccessCode } from '../services/mealPhoto'
+import { analyzeMeal, getAccessCode, getPhotoProvider, MealPhotoError, prepareImage, setAccessCode, type PhotoProvider } from '../services/mealPhoto'
 import type { MealItem } from '../shared/meal'
 import type { FoodEntry } from '../types'
 
@@ -26,6 +26,18 @@ const saveToQuick = ref(false)
 let controller: AbortController | null = null
 let nextKey = 1
 onBeforeUnmount(() => controller?.abort())
+
+const provider = ref<PhotoProvider | 'unknown' | 'loading'>('loading')
+onMounted(async () => { provider.value = await getPhotoProvider() })
+/** Shown before any photo is sent: users should know which company receives it and on what terms. */
+const disclosure = computed(() => ({
+  gemini: 'The photo is resized and sent to Google Gemini for the estimate. On Gemini’s free tier, Google may use submitted photos to improve its products. Hibi doesn’t keep the photo.',
+  claude: 'The photo is resized and sent to Anthropic’s Claude for the estimate. Hibi doesn’t keep the photo.',
+  mock: 'Test mode: photos aren’t sent anywhere.',
+  unknown: 'The photo is resized and sent to an AI service for the estimate. Hibi doesn’t keep the photo.',
+  loading: '',
+}[provider.value ?? 'unknown'] ?? ''))
+const unavailable = computed(() => provider.value === null)
 
 const rates = (item: Pick<MealItem, 'grams' | 'calories' | 'protein'>) => ({
   kcalPerGram: item.grams > 0 ? item.calories / item.grams : 0,
@@ -126,7 +138,7 @@ const logAll = () => {
   <div class="photo-pane">
     <p v-if="error" class="inline-alert" role="alert">{{ error }}</p>
 
-    <form v-if="needsCode && step !== 'review'" class="access-code" @submit.prevent="saveCode">
+    <form v-if="needsCode && step !== 'review' && !unavailable" class="access-code" @submit.prevent="saveCode">
       <label class="field"><span><KeyRound :size="13" /> Access code</span><input v-model="codeInput" autocomplete="off" placeholder="The code set on your Hibi server" /></label>
       <button class="secondary-button" type="submit" :disabled="!codeInput.trim()">Save</button>
     </form>
@@ -141,7 +153,8 @@ const logAll = () => {
           <label class="secondary-button"><ImageIcon :size="17" /> Choose photo<input type="file" accept="image/*" hidden @change="onFile" /></label>
         </div>
       </div>
-      <p class="data-credit">The photo is resized and sent to Claude (Anthropic) for the estimate. Hibi doesn’t keep it.</p>
+      <p v-if="unavailable" class="inline-alert">Photo estimates aren’t set up on this Hibi server yet. Search, barcode scan and manual entry still work.</p>
+      <p v-else class="data-credit">{{ disclosure }}</p>
     </template>
 
     <template v-else-if="step === 'ready' || step === 'analyzing'">
@@ -153,7 +166,7 @@ const logAll = () => {
       <div class="photo-buttons">
         <button v-if="step === 'analyzing'" class="secondary-button" type="button" @click="cancel">Cancel</button>
         <button v-else class="secondary-button" type="button" @click="startOver"><RotateCcw :size="16" /> New photo</button>
-        <button class="primary-button" type="button" :disabled="step === 'analyzing' || needsCode" @click="analyze"><Sparkles :size="17" /> Estimate calories</button>
+        <button class="primary-button" type="button" :disabled="step === 'analyzing' || needsCode || unavailable" @click="analyze"><Sparkles :size="17" /> Estimate calories</button>
       </div>
     </template>
 

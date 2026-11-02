@@ -17,6 +17,17 @@ vi.mock('@netlify/blobs', () => ({
   },
 }))
 
+const generateContent = vi.fn()
+vi.mock('@google/genai', () => {
+  class ApiError extends Error {
+    status: number
+    constructor({ message, status }: { message: string; status: number }) { super(message); this.status = status }
+  }
+  class GoogleGenAI { models = { generateContent } }
+  return { ApiError, GoogleGenAI }
+})
+const { ApiError } = await import('@google/genai')
+
 const sendNotification = vi.fn()
 vi.mock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification } }))
 
@@ -34,6 +45,7 @@ const photo = { image: 'aGVsbG8=', mediaType: 'image/jpeg' }
 beforeEach(() => {
   stores.clear()
   sendNotification.mockReset()
+  generateContent.mockReset()
   vi.stubEnv('HIBI_ACCESS_CODE', 'secret-code')
   vi.stubEnv('HIBI_MOCK_AI', '1')
   vi.stubEnv('VAPID_PUBLIC_KEY', 'public-key')
@@ -65,10 +77,64 @@ describe('analyze-meal', () => {
     expect(body.items[0]).toEqual(expect.objectContaining({ name: expect.any(String), calories: expect.any(Number), confidence: expect.any(String) }))
   })
 
+  it('tells the app which AI service is configured', async () => {
+    const get = () => analyzeMeal(new Request('https://hibi.test/api/analyze-meal'))
+    expect(await (await get()).json()).toEqual({ provider: 'mock' })
+    vi.stubEnv('HIBI_MOCK_AI', '')
+    vi.stubEnv('GEMINI_API_KEY', 'g-key')
+    expect(await (await get()).json()).toEqual({ provider: 'gemini' })
+    vi.stubEnv('GEMINI_API_KEY', '')
+    vi.stubEnv('ANTHROPIC_API_KEY', 'a-key')
+    expect(await (await get()).json()).toEqual({ provider: 'claude' })
+  })
+
+  it('accepts any of several comma-separated access codes', async () => {
+    vi.stubEnv('HIBI_ACCESS_CODE', 'owner-code, friend-code')
+    expect((await analyzeMeal(post(photo, 'friend-code'))).status).toBe(200)
+    expect((await analyzeMeal(post(photo, 'owner-code'))).status).toBe(200)
+    expect((await analyzeMeal(post(photo, 'friend'))).status).toBe(401)
+  })
+
   it('needs an API key outside mock mode', async () => {
     vi.stubEnv('HIBI_MOCK_AI', '')
     vi.stubEnv('ANTHROPIC_API_KEY', '')
     expect((await analyzeMeal(post(photo, 'secret-code'))).status).toBe(503)
+  })
+})
+
+describe('analyze-meal with Gemini', () => {
+  const estimate = { items: [{ name: 'Poha', portion: '1 plate (~200 g)', grams: 200.4, calories: 250.6, protein: 5.04, confidence: 'high', note: ' ' }], summary: ' Poha. ' }
+  beforeEach(() => {
+    vi.stubEnv('HIBI_MOCK_AI', '')
+    vi.stubEnv('GEMINI_API_KEY', 'g-key')
+  })
+
+  it('sends the photo with the shared prompt and returns a tidied estimate', async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify(estimate) })
+    const response = await analyzeMeal(post({ ...photo, hint: '  extra peanuts ' }, 'secret-code'))
+    expect(await response.json()).toEqual({ summary: 'Poha.', items: [{ ...estimate.items[0], grams: 200, calories: 251, protein: 5, note: '' }] })
+    const request = generateContent.mock.calls[0][0]
+    expect(request.model).toBe('gemini-3.8-flash')
+    expect(request.contents[0].parts[0]).toEqual({ inlineData: { mimeType: 'image/jpeg', data: photo.image } })
+    expect(request.contents[0].parts[1].text).toContain('extra peanuts')
+    expect(request.config.responseJsonSchema).not.toHaveProperty('$schema')
+  })
+
+  it('turns quota and malformed replies into clear errors', async () => {
+    generateContent.mockRejectedValueOnce(new ApiError({ message: 'Resource exhausted', status: 429 }))
+    const limited = await analyzeMeal(post(photo, 'secret-code'))
+    expect(limited.status).toBe(429)
+    expect((await limited.json() as { error: string }).error).toContain('quota')
+    generateContent.mockResolvedValueOnce({ text: 'not json' })
+    expect((await analyzeMeal(post(photo, 'secret-code'))).status).toBe(502)
+  })
+
+  it('limits each access code separately per day', async () => {
+    vi.stubEnv('HIBI_ACCESS_CODE', 'owner-code,friend-code')
+    generateContent.mockResolvedValue({ text: JSON.stringify(estimate) })
+    for (let i = 0; i < 40; i += 1) await analyzeMeal(post(photo, 'owner-code'))
+    expect((await analyzeMeal(post(photo, 'owner-code'))).status).toBe(429)
+    expect((await analyzeMeal(post(photo, 'friend-code'))).status).toBe(200)
   })
 })
 
