@@ -1,17 +1,8 @@
 import type { AnalyzeMealRequest, MealAnalysis } from '../shared/meal'
 
-const ACCESS_KEY = 'hibi-access-code'
 const MAX_SIDE = 1280
 
-export class MealPhotoError extends Error {
-  constructor(message: string, readonly needsAccessCode = false) {
-    super(message)
-  }
-}
-
-/** Kept per device and out of backups, since it unlocks the owner's API credit. */
-export const getAccessCode = () => { try { return localStorage.getItem(ACCESS_KEY) ?? '' } catch { return '' } }
-export const setAccessCode = (code: string) => { try { localStorage.setItem(ACCESS_KEY, code.trim()) } catch { /* private mode */ } }
+export class MealPhotoError extends Error {}
 
 /**
  * Downscales to at most 1280 px and re-encodes as JPEG. Phone photos are 3-12 MB; this keeps
@@ -49,14 +40,12 @@ export const getPhotoProvider = async (): Promise<PhotoProvider | 'unknown'> => 
 
 export const analyzeMeal = async (request: AnalyzeMealRequest, signal?: AbortSignal): Promise<MealAnalysis> => {
   if (!navigator.onLine) throw new MealPhotoError('You’re offline. Photo estimates need an internet connection.')
-  const code = getAccessCode()
-  if (!code) throw new MealPhotoError('Enter your access code to use photo estimates.', true)
   let response: Response
   try {
     // Functions live at the domain root, whatever base path the app is served under.
     response = await fetch('/api/analyze-meal', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-hibi-access-code': code },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(request),
       signal,
     })
@@ -65,6 +54,6 @@ export const analyzeMeal = async (request: AnalyzeMealRequest, signal?: AbortSig
     throw new MealPhotoError('Couldn’t reach the server. Check your connection and try again.')
   }
   const body = await response.json().catch(() => null) as (MealAnalysis & { error?: string }) | null
-  if (!response.ok || !body) throw new MealPhotoError(body?.error ?? `The server returned an error (${response.status}).`, response.status === 401)
+  if (!response.ok || !body) throw new MealPhotoError(body?.error ?? `The server returned an error (${response.status}).`)
   return body
 }

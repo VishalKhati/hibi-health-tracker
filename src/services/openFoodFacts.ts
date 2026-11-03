@@ -1,6 +1,7 @@
 /**
- * Open Food Facts client (https://world.openfoodfacts.org, data under ODbL).
- * Only this host sends CORS headers for browser requests; search.openfoodfacts.org does not.
+ * Open Food Facts client (https://world.openfoodfacts.org, data under ODbL), used for barcodes.
+ * Text search goes through Hibi's own /api/food-search instead (see foodSearch.ts): Open Food
+ * Facts' search is rate-limited, often down, and has few Indian home-cooked dishes.
  */
 const BASE = 'https://world.openfoodfacts.org'
 const FIELDS = 'code,product_name,brands,nutriments,serving_size,serving_quantity'
@@ -14,6 +15,10 @@ export interface FoodProduct {
   /** Grams in one labelled serving, when the label gives one. */
   servingGrams?: number
   servingLabel?: string
+  /** How it's prepared, for AI search results that have no brand. */
+  detail?: string
+  /** True for AI search results: reference values rather than a product label. */
+  estimated?: boolean
 }
 
 interface RawProduct {
@@ -67,23 +72,9 @@ const request = async (url: string, signal?: AbortSignal) => {
   }
   // Unknown barcodes come back either as 404 or as 200 with status 0; both mean "not found".
   if (response.status === 404) return {}
-  // Search is limited to ~10 requests/minute per IP; the limiter answers 429 or a 503 HTML page.
-  if (response.status === 429 || response.status === 503) throw new FoodLookupError('Food search is busy right now. Wait a moment and try again.')
+  if (response.status === 429 || response.status === 503) throw new FoodLookupError('Open Food Facts is busy right now. Wait a moment and try again.')
   if (!response.ok) throw new FoodLookupError(`Open Food Facts returned an error (${response.status}).`)
   return response.json()
-}
-
-export const searchFoods = async (query: string, signal?: AbortSignal): Promise<FoodProduct[]> => {
-  const params = new URLSearchParams({ search_terms: query, search_simple: '1', action: 'process', json: '1', page_size: '24', fields: FIELDS })
-  const body = await request(`${BASE}/cgi/search.pl?${params}`, signal) as { products?: RawProduct[] }
-  const seen = new Set<string>()
-  return (body.products ?? []).map(toFoodProduct).filter((product): product is FoodProduct => {
-    if (!product) return false
-    const key = `${product.name}|${product.brand}`.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 export const lookupBarcode = async (barcode: string, signal?: AbortSignal): Promise<FoodProduct | null> => {

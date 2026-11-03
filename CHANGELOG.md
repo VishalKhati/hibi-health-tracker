@@ -4,6 +4,20 @@ The version shown in Settings → About comes from `package.json`. To release, r
 `npm version minor` (new features) or `npm version patch` (fixes), add a section here, and push
 with `git push --follow-tags`.
 
+## v2.2 — 2026-11-03
+
+- Food search now works for Indian food. Searching "roti" or "paneer butter masala" returns cooked-food
+  values based on the Indian Food Composition Tables (IFCT 2017, NIN) and USDA data, with household
+  servings such as "1 medium roti" and a one-tap "2 ×" portion. Results come from Google Gemini and
+  are cached, so repeat searches are instant. Open Food Facts is still used for barcodes.
+- Photo estimates no longer ask for an access code. Each visitor gets a daily allowance instead.
+- Photo estimates and search switch to another Gemini model when Google reports high demand,
+  instead of failing.
+- Water: a − button next to "Add glass" removes a glass logged by mistake.
+- Settings → Your data → Reset all data starts Hibi fresh, with default goals and quick foods. Theme
+  and reminder settings are kept.
+- Clearer iPhone install steps for newer Safari, where Share sits inside the ⋯ or ≡ menu.
+
 ## v2.1 — 2026-11-02
 
 - "New version of Hibi ready · Update" banner when an update has downloaded, instead of reloading

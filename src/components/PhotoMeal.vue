@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Camera, Image as ImageIcon, KeyRound, LoaderCircle, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-vue-next'
+import { Camera, Image as ImageIcon, LoaderCircle, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-vue-next'
 import { useHealthStore } from '../stores/health'
-import { analyzeMeal, getAccessCode, getPhotoProvider, MealPhotoError, prepareImage, setAccessCode, type PhotoProvider } from '../services/mealPhoto'
+import { analyzeMeal, getPhotoProvider, prepareImage, type PhotoProvider } from '../services/mealPhoto'
 import type { MealItem } from '../shared/meal'
 import type { FoodEntry } from '../types'
 
@@ -18,8 +18,6 @@ const step = ref<Step>('pick')
 const photo = ref<Awaited<ReturnType<typeof prepareImage>> | null>(null)
 const hint = ref('')
 const error = ref('')
-const needsCode = ref(!getAccessCode())
-const codeInput = ref('')
 const summary = ref('')
 const items = reactive<EditableItem[]>([])
 const saveToQuick = ref(false)
@@ -58,14 +56,6 @@ const onFile = async (event: Event) => {
   }
 }
 
-const saveCode = () => {
-  if (!codeInput.value.trim()) return
-  setAccessCode(codeInput.value)
-  codeInput.value = ''
-  needsCode.value = false
-  error.value = ''
-}
-
 const analyze = async () => {
   if (!photo.value) return
   controller?.abort()
@@ -79,7 +69,6 @@ const analyze = async () => {
     step.value = 'review'
   } catch (reason) {
     if (current.signal.aborted) return
-    if (reason instanceof MealPhotoError && reason.needsAccessCode) needsCode.value = true
     error.value = reason instanceof Error ? reason.message : 'Something went wrong. Please try again.'
     step.value = 'ready'
   }
@@ -138,11 +127,6 @@ const logAll = () => {
   <div class="photo-pane">
     <p v-if="error" class="inline-alert" role="alert">{{ error }}</p>
 
-    <form v-if="needsCode && step !== 'review' && !unavailable" class="access-code" @submit.prevent="saveCode">
-      <label class="field"><span><KeyRound :size="13" /> Access code</span><input v-model="codeInput" autocomplete="off" placeholder="The code set on your Hibi server" /></label>
-      <button class="secondary-button" type="submit" :disabled="!codeInput.trim()">Save</button>
-    </form>
-
     <template v-if="step === 'pick'">
       <div class="photo-drop">
         <span class="empty-illustration"><Camera :size="28" /></span>
@@ -166,7 +150,7 @@ const logAll = () => {
       <div class="photo-buttons">
         <button v-if="step === 'analyzing'" class="secondary-button" type="button" @click="cancel">Cancel</button>
         <button v-else class="secondary-button" type="button" @click="startOver"><RotateCcw :size="16" /> New photo</button>
-        <button class="primary-button" type="button" :disabled="step === 'analyzing' || needsCode || unavailable" @click="analyze"><Sparkles :size="17" /> Estimate calories</button>
+        <button class="primary-button" type="button" :disabled="step === 'analyzing' || unavailable" @click="analyze"><Sparkles :size="17" /> Estimate calories</button>
       </div>
     </template>
 

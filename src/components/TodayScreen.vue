@@ -61,7 +61,7 @@ const supplementProgress = computed(() => {
       <MetricCard label="Calories" :value="store.todayTotals.value.calories" :goal="goals.calories" unit="kcal" :icon="Flame" color="#e99863" action="Add food" @action="$emit('addFood')" />
       <MetricCard label="Protein" :value="store.todayTotals.value.protein" :goal="goals.protein" unit="g" :icon="Salad" color="#86a78c" />
       <MetricCard label="Steps" :value="store.todayTotals.value.steps" :goal="goals.steps" unit="steps" :icon="Footprints" color="#8d83bd" action="Update" @action="updateSteps()" />
-      <MetricCard label="Water" :value="store.todayTotals.value.water" :goal="goals.water" unit="glasses" :icon="Droplets" color="#659faf" action="Add glass" @action="store.setDayValue('water', store.todayTotals.value.water + 1)" />
+      <MetricCard label="Water" :value="store.todayTotals.value.water" :goal="goals.water" unit="glasses" :icon="Droplets" color="#659faf" action="Add glass" undo="Remove a glass" @action="store.setDayValue('water', store.todayTotals.value.water + 1)" @undo="store.setDayValue('water', store.todayTotals.value.water - 1)" />
     </section>
 
     <section class="split-grid">

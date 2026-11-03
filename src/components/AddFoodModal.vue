@@ -5,7 +5,8 @@ import BaseModal from './BaseModal.vue'
 import BarcodeScanner from './BarcodeScanner.vue'
 import PhotoMeal from './PhotoMeal.vue'
 import { useHealthStore } from '../stores/health'
-import { FoodLookupError, lookupBarcode, nutritionFor, searchFoods, type FoodProduct } from '../services/openFoodFacts'
+import { FoodLookupError, lookupBarcode, nutritionFor, type FoodProduct } from '../services/openFoodFacts'
+import { searchFoods } from '../services/foodSearch'
 import type { FoodEntry } from '../types'
 
 const props = withDefaults(defineProps<{ initialMeal?: FoodEntry['meal'] }>(), { initialMeal: 'Breakfast' })
@@ -72,7 +73,17 @@ const onDetected = async (code: string) => {
 }
 
 const portion = computed(() => (selected.value ? nutritionFor(selected.value, grams.value || 0) : { calories: 0, protein: 0 }))
-const isServing = computed(() => !!selected.value?.servingGrams && grams.value === selected.value.servingGrams)
+/** Search results name their serving ("1 medium roti"); product labels only give a weight. */
+const servingName = computed(() => (selected.value?.estimated && selected.value.servingLabel) || '1 serving')
+/** 1 or 2 servings when the amount matches one, so "2 rotis" is one tap. */
+const servingCount = computed(() => {
+  const size = selected.value?.servingGrams
+  return size ? [1, 2].find((count) => grams.value === size * count) ?? 0 : 0
+})
+const portionLabel = computed(() => {
+  if (!servingCount.value) return `${grams.value} g`
+  return `${servingCount.value === 2 ? `2 × ${servingName.value}` : servingName.value} (${grams.value} g)`
+})
 
 const addProduct = () => {
   const product = selected.value
@@ -81,7 +92,7 @@ const addProduct = () => {
     date: store.selectedDate.value,
     name: product.brand ? `${product.name} (${product.brand})` : product.name,
     meal: meal.value,
-    portion: isServing.value ? `1 serving (${grams.value} g)` : `${grams.value} g`,
+    portion: portionLabel.value,
     calories: portion.value.calories,
     protein: portion.value.protein,
     barcode: product.barcode || undefined,
@@ -114,17 +125,21 @@ const addProduct = () => {
         <button type="button" class="link-button" @click="selected = null"><ArrowLeft :size="15" /> Back to results</button>
         <div class="product-heading">
           <strong>{{ selected.name }}</strong>
-          <small>{{ [selected.brand, `${Math.round(selected.kcalPer100g)} kcal · ${selected.proteinPer100g}g protein per 100 g`].filter(Boolean).join(' · ') }}</small>
+          <small>{{ [selected.brand || selected.detail, `${Math.round(selected.kcalPer100g)} kcal · ${selected.proteinPer100g}g protein per 100 g`].filter(Boolean).join(' · ') }}</small>
         </div>
         <div class="portion-chips">
-          <button v-if="selected.servingGrams" type="button" :class="['choice-chip', { active: isServing }]" @click="grams = selected.servingGrams!">1 serving · {{ selected.servingGrams }} g</button>
-          <button type="button" :class="['choice-chip', { active: grams === 100 && !isServing }]" @click="grams = 100">100 g</button>
+          <template v-if="selected.servingGrams">
+            <button type="button" :class="['choice-chip', { active: servingCount === 1 }]" @click="grams = selected.servingGrams!">{{ servingName }} · {{ selected.servingGrams }} g</button>
+            <button v-if="selected.estimated" type="button" :class="['choice-chip', { active: servingCount === 2 }]" @click="grams = selected.servingGrams! * 2">×2 · {{ selected.servingGrams * 2 }} g</button>
+          </template>
+          <button type="button" :class="['choice-chip', { active: grams === 100 && !servingCount }]" @click="grams = 100">100 g</button>
         </div>
         <label class="field"><span>Amount (g)</span><input v-model.number="grams" type="number" min="1" step="1" inputmode="decimal" required /></label>
         <div class="nutrition-summary" aria-live="polite">
           <div><strong>{{ portion.calories }}</strong><span>kcal</span></div>
           <div><strong>{{ portion.protein }}g</strong><span>protein</span></div>
         </div>
+        <p v-if="selected.estimated" class="data-credit">Typical values for this dish. Home recipes vary, so adjust the amount if yours is bigger or richer.</p>
         <label class="check-row"><input v-model="saveProduct" type="checkbox" /><BookmarkPlus :size="18" /><span>Save for quick logging</span></label>
         <button class="primary-button" type="submit" :disabled="!(grams > 0)">Add to {{ meal.toLowerCase() }}</button>
       </form>
@@ -136,20 +151,21 @@ const addProduct = () => {
 
       <template v-else>
         <form class="search-bar" role="search" @submit.prevent="runSearch">
-          <input v-model="query" type="search" enterkeyhint="search" placeholder="e.g. oats, paneer, peanut butter" aria-label="Search foods" />
+          <input v-model="query" type="search" enterkeyhint="search" placeholder="e.g. roti, paneer butter masala, Amul milk" aria-label="Search foods" />
           <button class="primary-button" type="submit" :disabled="loading || query.trim().length < 2" aria-label="Search"><Search :size="18" /></button>
         </form>
         <button type="button" class="secondary-button wide" @click="lookupError = ''; scanning = true"><ScanBarcode :size="18" /> Scan a barcode</button>
-        <p v-if="loading" class="lookup-status"><LoaderCircle :size="16" class="spin" /> Looking it up…</p>
+        <p v-if="loading" class="lookup-status"><LoaderCircle :size="16" class="spin" /> Looking it up… usually a few seconds</p>
         <p v-else-if="lookupError" class="inline-alert" role="alert">{{ lookupError }}</p>
-        <p v-else-if="results && !results.length" class="lookup-status">No matches. Try a simpler term, or add it under “New food”.</p>
+        <p v-else-if="results && !results.length" class="lookup-status">No matches. Try different words, or add it under “New”.</p>
         <div v-if="results?.length && !loading" class="result-list">
           <button v-for="product in results" :key="product.barcode || product.name" class="result-row" @click="choose(product)">
-            <span class="entry-main"><strong>{{ product.name }}</strong><small>{{ product.brand || 'Unbranded' }}</small></span>
-            <span class="result-values"><strong>{{ Math.round(product.kcalPer100g) }}</strong> kcal<small>per 100 g</small></span>
+            <span class="entry-main"><strong>{{ product.name }}</strong><small>{{ product.detail || product.brand || 'Unbranded' }}</small></span>
+            <span v-if="product.servingGrams && product.servingLabel" class="result-values"><strong>{{ Math.round(product.kcalPer100g * product.servingGrams / 100) }}</strong> kcal<small>{{ product.servingLabel }}</small></span>
+            <span v-else class="result-values"><strong>{{ Math.round(product.kcalPer100g) }}</strong> kcal<small>per 100 g</small></span>
           </button>
         </div>
-        <p class="data-credit">Food data from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, shared under the ODbL. Values are per the product label.</p>
+        <p class="data-credit">Search results are estimates from Google Gemini, based on Indian (IFCT 2017, NIN) and USDA reference values. Barcode data comes from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (ODbL).</p>
       </template>
     </div>
 

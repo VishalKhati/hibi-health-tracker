@@ -11,11 +11,6 @@ set_secret() {
   echo "  ✓ $1"
 }
 
-# Readable random code like k7mq-x2pd-9tfa (no 0/o/1/l/i to avoid mix-ups).
-new_code() {
-  node -e "const a='abcdefghjkmnpqrstuvwxyz23456789',r=require('crypto').randomBytes(12);console.log([0,4,8].map(i=>[...r.subarray(i,i+4)].map(b=>a[b%a.length]).join('')).join('-'))"
-}
-
 # Functions only see new environment variables after a fresh deploy.
 redeploy() {
   local site_id

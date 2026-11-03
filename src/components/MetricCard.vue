@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
+import { Minus } from 'lucide-vue-next'
 import ProgressRing from './ProgressRing.vue'
 
 const props = defineProps<{
@@ -10,8 +11,10 @@ const props = defineProps<{
   icon: Component
   color: string
   action?: string
+  /** Accessible name for a "−1" button beside the action, e.g. "Remove a glass". */
+  undo?: string
 }>()
-defineEmits<{ action: [] }>()
+defineEmits<{ action: []; undo: [] }>()
 const percentage = computed(() => Math.min(100, Math.round((props.value / Math.max(1, props.goal)) * 100)))
 </script>
 
@@ -31,6 +34,9 @@ const percentage = computed(() => Math.min(100, Math.round((props.value / Math.m
         <p>of {{ goal.toLocaleString() }} {{ unit }}</p>
       </div>
     </div>
-    <button v-if="action" class="metric-action" @click="$emit('action')">{{ action }}</button>
+    <div v-if="action" class="metric-actions">
+      <button v-if="undo" class="metric-action metric-undo" type="button" :aria-label="undo" :title="undo" :disabled="value <= 0" @click="$emit('undo')"><Minus :size="14" /></button>
+      <button class="metric-action" type="button" @click="$emit('action')">{{ action }}</button>
+    </div>
   </article>
 </template>

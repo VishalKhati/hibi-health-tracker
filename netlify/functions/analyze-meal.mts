@@ -1,13 +1,12 @@
-import { createHash } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
-import type { Config } from '@netlify/functions'
+import type { Config, Context } from '@netlify/functions'
 import type { AnalyzeMealRequest, MealAnalysis } from '../../src/shared/meal'
-import { checkAccessCode, fail, json } from './lib/http'
+import { fail, json } from './lib/http'
+import { clientId, withinDailyLimit } from './lib/limits'
 import { VisionError } from './lib/meal-prompt'
 import { estimateWithClaude } from './lib/vision-claude'
 import { estimateWithGemini } from './lib/vision-gemini'
 
-/** Per access code, so one person can't use up everyone's share. */
+/** Per visitor (IP), so one person can't use up everyone's free quota. */
 const DAILY_LIMIT = Number(process.env.HIBI_DAILY_PHOTO_LIMIT ?? 40)
 /** About 4 MB of base64; the app sends ~200-400 KB after resizing. */
 const MAX_IMAGE_CHARS = 5_500_000
@@ -26,17 +25,6 @@ const MOCK: MealAnalysis = {
   summary: 'Rajma chawal with a small salad.',
 }
 
-/** Bounds use per code if one leaks. Best-effort: concurrent requests can race past by one or two. */
-const withinDailyLimit = async (code: string) => {
-  const store = getStore('hibi-usage')
-  const who = createHash('sha256').update(code).digest('hex').slice(0, 12)
-  const key = `analyze-meal/${new Date().toISOString().slice(0, 10)}/${who}`
-  const used = Number((await store.get(key)) ?? 0)
-  if (used >= DAILY_LIMIT) return false
-  await store.set(key, String(used + 1))
-  return true
-}
-
 const tidy = (analysis: MealAnalysis): MealAnalysis => ({
   summary: analysis.summary.trim(),
   items: analysis.items.map((item) => ({
@@ -50,12 +38,9 @@ const tidy = (analysis: MealAnalysis): MealAnalysis => ({
   })),
 })
 
-export default async (req: Request) => {
+export default async (req: Request, context?: Context) => {
   // The app asks which service is configured so it can tell users where photos go.
   if (req.method === 'GET') return json({ provider: provider() })
-
-  const access = checkAccessCode(req)
-  if ('denied' in access) return access.denied
 
   let body: AnalyzeMealRequest
   try {
@@ -70,7 +55,7 @@ export default async (req: Request) => {
   const service = provider()
   if (service === 'mock') return json(MOCK)
   if (!service) return fail(503, 'Photo estimates aren’t set up on this server yet (missing AI key).')
-  if (!(await withinDailyLimit(access.code))) return fail(429, `Today’s limit of ${DAILY_LIMIT} photo estimates for this access code is used up. It resets at midnight UTC.`)
+  if (!(await withinDailyLimit('analyze-meal', clientId(req, context), DAILY_LIMIT))) return fail(429, `Today’s limit of ${DAILY_LIMIT} photo estimates is used up. It resets at 5:30 am India time.`)
 
   try {
     return json(tidy(service === 'gemini' ? await estimateWithGemini(input) : await estimateWithClaude(input)))

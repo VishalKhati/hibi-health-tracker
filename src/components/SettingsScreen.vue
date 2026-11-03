@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Check, Database, Download, Info, LoaderCircle, Monitor, Moon, Palette, RefreshCw, RotateCcw, Sun, Upload } from 'lucide-vue-next'
+import { Check, Database, Download, Info, LoaderCircle, Monitor, Moon, Palette, RefreshCw, RotateCcw, Sun, Trash2, Upload } from 'lucide-vue-next'
 import { useHealthStore } from '../stores/health'
 import InstallPrompt from './InstallPrompt.vue'
 import RemindersCard from './RemindersCard.vue'
@@ -31,6 +31,12 @@ const download = () => {
   link.click()
   URL.revokeObjectURL(link.href)
   message.value = 'Backup exported.'
+}
+const confirmingReset = ref(false)
+const reset = () => {
+  store.resetData()
+  confirmingReset.value = false
+  message.value = 'Hibi has been reset. Your theme and reminder settings were kept.'
 }
 const upload = async (event: Event) => {
   try {
@@ -73,6 +79,11 @@ const upload = async (event: Event) => {
         <div class="settings-heading"><span class="settings-icon peach"><Database :size="20" /></span><div><h2>Your data</h2><p>Keep a copy somewhere safe.</p></div></div>
         <div class="backup-actions"><button class="secondary-button" @click="download"><Download :size="18" /> Export backup</button><button class="secondary-button" @click="fileInput?.click()"><Upload :size="18" /> Import backup</button><input ref="fileInput" hidden type="file" accept="application/json,.json" @change="upload" /></div>
         <p class="privacy-note"><Info :size="16" /> Hibi is offline-first. Clearing browser data can remove your entries, so export a backup regularly.</p>
+        <div v-if="confirmingReset" class="reset-confirm" role="alert">
+          <p><strong>Delete everything and start fresh?</strong> This removes all food, activity, water, steps, weight and supplement entries, your saved foods and your goals, and puts back the starting values. It can’t be undone, so export a backup first if you might want it later.</p>
+          <div class="backup-actions"><button class="secondary-button" type="button" @click="confirmingReset = false">Cancel</button><button class="danger-button" type="button" @click="reset"><Trash2 :size="16" /> Yes, reset Hibi</button></div>
+        </div>
+        <button v-else class="link-button danger-link" type="button" @click="message = ''; confirmingReset = true"><RotateCcw :size="15" /> Reset all data…</button>
         <p v-if="message" class="success-message"><Check :size="16" /> {{ message }}</p>
       </article>
       <article class="panel about-card">

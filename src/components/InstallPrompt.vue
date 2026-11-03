@@ -14,7 +14,7 @@ const { installed, canPrompt, showIosSteps, available, dismissed, install, dismi
     <div>
       <strong>Put Hibi on your home screen</strong>
       <small v-if="canPrompt">Opens like an app, works offline.</small>
-      <small v-else>In Safari, tap <Share :size="13" aria-label="Share" /> then “Add to Home Screen”.</small>
+      <small v-else>In Safari, tap <strong>⋯</strong> or <strong>≡</strong> by the address bar, then <strong>Share</strong> <Share :size="13" aria-hidden="true" /> → <strong>Add to Home Screen</strong>.</small>
     </div>
     <button v-if="canPrompt" class="primary-button" @click="install"><Download :size="16" /> Install</button>
     <button class="icon-button subtle" aria-label="Dismiss" @click="dismiss"><X :size="17" /></button>
@@ -26,8 +26,9 @@ const { installed, canPrompt, showIosSteps, available, dismissed, install, dismi
     <button v-else-if="canPrompt" class="primary-button" @click="install"><Download :size="18" /> Install Hibi</button>
     <ol v-else-if="showIosSteps" class="install-steps">
       <li>Open this page in <strong>Safari</strong>.</li>
-      <li>Tap the <strong>Share</strong> button <Share :size="15" aria-hidden="true" /> in the toolbar.</li>
-      <li>Choose <strong>Add to Home Screen</strong> <SquarePlus :size="15" aria-hidden="true" />, then tap <strong>Add</strong>.</li>
+      <li>Tap <strong>Share</strong> <Share :size="15" aria-hidden="true" />. In newer Safari it’s inside the <strong>⋯</strong> or <strong>≡</strong> menu next to the address bar.</li>
+      <li>Scroll down and choose <strong>Add to Home Screen</strong> <SquarePlus :size="15" aria-hidden="true" /> (tap <strong>View More</strong> if you don’t see it).</li>
+      <li>Leave <strong>Open as Web App</strong> on, tap <strong>Add</strong>, and open Hibi from the new icon. Reminders on iPhone only work from the icon.</li>
     </ol>
     <p v-else class="privacy-note">Open your browser’s menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. In Chrome on a computer, you can also use the install icon at the right end of the address bar. Installing needs the site to be on HTTPS.</p>
   </article>

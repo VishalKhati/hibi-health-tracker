@@ -32,21 +32,22 @@ const sendNotification = vi.fn()
 vi.mock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification } }))
 
 const { default: analyzeMeal } = await import('../analyze-meal.mts')
+const { default: foodSearch } = await import('../food-search.mts')
 const { default: reminders } = await import('../reminders.mts')
 const { default: sendReminders } = await import('../send-reminders.mts')
 
-const post = (body: unknown, code?: string) => new Request('https://hibi.test/api/analyze-meal', {
+const post = (body: unknown, ip = '203.0.113.7') => analyzeMeal(new Request('https://hibi.test/api/analyze-meal', {
   method: 'POST',
-  headers: { 'content-type': 'application/json', ...(code ? { 'x-hibi-access-code': code } : {}) },
+  headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
-})
+}), { ip } as never)
 const photo = { image: 'aGVsbG8=', mediaType: 'image/jpeg' }
+const search = (q: string, ip = '203.0.113.7') => foodSearch(new Request(`https://hibi.test/api/food-search?q=${encodeURIComponent(q)}`), { ip } as never)
 
 beforeEach(() => {
   stores.clear()
   sendNotification.mockReset()
   generateContent.mockReset()
-  vi.stubEnv('HIBI_ACCESS_CODE', 'secret-code')
   vi.stubEnv('HIBI_MOCK_AI', '1')
   vi.stubEnv('VAPID_PUBLIC_KEY', 'public-key')
   vi.stubEnv('VAPID_PRIVATE_KEY', 'private-key')
@@ -54,23 +55,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('analyze-meal', () => {
-  it('requires the access code', async () => {
-    expect((await analyzeMeal(post(photo))).status).toBe(401)
-    expect((await analyzeMeal(post(photo, 'wrong'))).status).toBe(401)
-  })
-
-  it('reports a missing server setup instead of failing open', async () => {
-    vi.stubEnv('HIBI_ACCESS_CODE', '')
-    expect((await analyzeMeal(post(photo, 'anything'))).status).toBe(503)
-  })
-
   it('validates the photo before calling the model', async () => {
-    expect((await analyzeMeal(post({ ...photo, mediaType: 'image/gif' }, 'secret-code'))).status).toBe(400)
-    expect((await analyzeMeal(post({ ...photo, image: '' }, 'secret-code'))).status).toBe(413)
+    expect((await post({ ...photo, mediaType: 'image/gif' })).status).toBe(400)
+    expect((await post({ ...photo, image: '' })).status).toBe(413)
   })
 
-  it('returns an editable estimate', async () => {
-    const response = await analyzeMeal(post(photo, 'secret-code'))
+  it('returns an editable estimate without any access code', async () => {
+    const response = await post(photo)
     expect(response.status).toBe(200)
     const body = await response.json() as { items: Record<string, unknown>[] }
     expect(body.items.length).toBeGreaterThan(0)
@@ -88,17 +79,11 @@ describe('analyze-meal', () => {
     expect(await (await get()).json()).toEqual({ provider: 'claude' })
   })
 
-  it('accepts any of several comma-separated access codes', async () => {
-    vi.stubEnv('HIBI_ACCESS_CODE', 'owner-code, friend-code')
-    expect((await analyzeMeal(post(photo, 'friend-code'))).status).toBe(200)
-    expect((await analyzeMeal(post(photo, 'owner-code'))).status).toBe(200)
-    expect((await analyzeMeal(post(photo, 'friend'))).status).toBe(401)
-  })
-
   it('needs an API key outside mock mode', async () => {
     vi.stubEnv('HIBI_MOCK_AI', '')
+    vi.stubEnv('GEMINI_API_KEY', '')
     vi.stubEnv('ANTHROPIC_API_KEY', '')
-    expect((await analyzeMeal(post(photo, 'secret-code'))).status).toBe(503)
+    expect((await post(photo)).status).toBe(503)
   })
 })
 
@@ -111,7 +96,7 @@ describe('analyze-meal with Gemini', () => {
 
   it('sends the photo with the shared prompt and returns a tidied estimate', async () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(estimate) })
-    const response = await analyzeMeal(post({ ...photo, hint: '  extra peanuts ' }, 'secret-code'))
+    const response = await post({ ...photo, hint: '  extra peanuts ' })
     expect(await response.json()).toEqual({ summary: 'Poha.', items: [{ ...estimate.items[0], grams: 200, calories: 251, protein: 5, note: '' }] })
     const request = generateContent.mock.calls[0][0]
     expect(request.model).toBe('gemini-3.8-flash')
@@ -120,21 +105,71 @@ describe('analyze-meal with Gemini', () => {
     expect(request.config.responseJsonSchema).not.toHaveProperty('$schema')
   })
 
-  it('turns quota and malformed replies into clear errors', async () => {
-    generateContent.mockRejectedValueOnce(new ApiError({ message: 'Resource exhausted', status: 429 }))
-    const limited = await analyzeMeal(post(photo, 'secret-code'))
-    expect(limited.status).toBe(429)
-    expect((await limited.json() as { error: string }).error).toContain('quota')
-    generateContent.mockResolvedValueOnce({ text: 'not json' })
-    expect((await analyzeMeal(post(photo, 'secret-code'))).status).toBe(502)
+  it('falls back to the next model when Google is overloaded', async () => {
+    generateContent.mockRejectedValueOnce(new ApiError({ message: 'high demand', status: 503 }))
+    generateContent.mockResolvedValueOnce({ text: JSON.stringify(estimate) })
+    expect((await post(photo)).status).toBe(200)
+    expect(generateContent.mock.calls.map((call) => call[0].model)).toEqual(['gemini-3.8-flash', 'gemini-3.5-flash'])
   })
 
-  it('limits each access code separately per day', async () => {
-    vi.stubEnv('HIBI_ACCESS_CODE', 'owner-code,friend-code')
+  it('turns exhausted quota and malformed replies into clear errors', async () => {
+    generateContent.mockRejectedValue(new ApiError({ message: 'Resource exhausted', status: 429 }))
+    const limited = await post(photo)
+    expect(limited.status).toBe(429)
+    expect((await limited.json() as { error: string }).error).toContain('quota')
+    generateContent.mockReset()
+    generateContent.mockResolvedValueOnce({ text: 'not json' })
+    expect((await post(photo)).status).toBe(502)
+  })
+
+  it('limits each visitor separately per day', async () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(estimate) })
-    for (let i = 0; i < 40; i += 1) await analyzeMeal(post(photo, 'owner-code'))
-    expect((await analyzeMeal(post(photo, 'owner-code'))).status).toBe(429)
-    expect((await analyzeMeal(post(photo, 'friend-code'))).status).toBe(200)
+    for (let i = 0; i < 40; i += 1) await post(photo, '198.51.100.1')
+    expect((await post(photo, '198.51.100.1')).status).toBe(429)
+    expect((await post(photo, '198.51.100.2')).status).toBe(200)
+  })
+})
+
+describe('food-search', () => {
+  const foods = { foods: [
+    { name: ' Plain roti ', detail: 'Whole wheat, no oil ', kcalPer100g: 247.4, proteinPer100g: 8.24, servingLabel: '1 medium roti', servingGrams: 35.2 },
+    { name: 'plain roti', detail: 'duplicate', kcalPer100g: 250, proteinPer100g: 8, servingLabel: '1 roti', servingGrams: 35 },
+    { name: 'Water', detail: 'No energy', kcalPer100g: 0, proteinPer100g: 0, servingLabel: '1 glass', servingGrams: 250 },
+  ] }
+  beforeEach(() => {
+    vi.stubEnv('HIBI_MOCK_AI', '')
+    vi.stubEnv('GEMINI_API_KEY', 'g-key')
+  })
+
+  it('needs at least two letters', async () => {
+    expect((await search(' r ')).status).toBe(400)
+    expect(generateContent).not.toHaveBeenCalled()
+  })
+
+  it('returns tidied reference values and caches them for the next person', async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify(foods) })
+    const first = await (await search('Roti')).json()
+    expect(first).toEqual({ foods: [{ name: 'Plain roti', detail: 'Whole wheat, no oil', kcalPer100g: 247, proteinPer100g: 8.2, servingLabel: '1 medium roti', servingGrams: 35 }] })
+    const request = generateContent.mock.calls[0][0]
+    expect(request.model).toBe('gemini-3.5-flash')
+    expect(request.config.systemInstruction).toContain('IFCT 2017')
+    expect(request.contents[0].parts[0].text).toBe('Search term: Roti')
+    // Same words, different case and spacing, another visitor: served from the cache.
+    expect(await (await search('  roti ', '198.51.100.9')).json()).toEqual(first)
+    expect(generateContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a busy service after trying every model', async () => {
+    generateContent.mockRejectedValue(new ApiError({ message: 'high demand', status: 503 }))
+    const response = await search('dal')
+    expect(response.status).toBe(503)
+    expect((await response.json() as { error: string }).error).toContain('busy')
+    expect(generateContent).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports a missing key', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    expect((await search('dal')).status).toBe(503)
   })
 })
 

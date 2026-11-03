@@ -179,9 +179,18 @@ export const useHealthStore = () => {
     Object.assign(data, normalize(parsed))
   }
 
+  /**
+   * Back to how Hibi starts on a new install: default goals and quick foods, no entries.
+   * Theme and reminder settings stay, since this device's reminders are registered on the server.
+   */
+  const resetData = () => {
+    Object.assign(data, { ...defaults(), preferences: data.preferences })
+    selectedDate.value = dateKey()
+  }
+
   return {
     data, selectedDate, foodsForDate, activitiesForDate, todayTotals, scheduledSupplements, week, dayStats,
     sortedWeights, latestWeight, bodyMetrics, streaks, earliestDate,
-    addFood, addSavedFood, addActivity, setDayValue, logWeight, removeWeight, addSupplement, logDose, doseStatus, remove, exportData, importData,
+    addFood, addSavedFood, addActivity, setDayValue, logWeight, removeWeight, addSupplement, logDose, doseStatus, remove, exportData, importData, resetData,
   }
 }

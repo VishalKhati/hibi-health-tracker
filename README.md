@@ -7,7 +7,8 @@ Hibi (日々) is a private, offline-first health tracker designed for quick dail
 - Today dashboard for calories, protein, steps, water, movement, and supplements
 - Food logging with reusable saved foods and meal grouping
 - Photo calorie estimates: snap a meal, an AI model (Google Gemini's free tier by default, or Claude) identifies each food and estimates grams, calories and protein, and you review and edit every item before it's logged
-- Food search and barcode scanning backed by [Open Food Facts](https://world.openfoodfacts.org), with portion sizes in grams or labelled servings
+- Food search for Indian and everyday foods: Google Gemini returns cooked-food values based on the Indian Food Composition Tables (IFCT 2017, NIN) and USDA data, with household servings like "1 medium roti"
+- Barcode scanning backed by [Open Food Facts](https://world.openfoodfacts.org), with portion sizes in grams or labelled servings
 - Walk, run, gym, and custom activity logs, with calories burned estimated from body weight and pace when left blank
 - Supplement schedules with taken/skipped states
 - Body screen: weight log, weight trend chart with a 7-day moving average, BMI, and daily calorie needs
@@ -38,7 +39,7 @@ These are population estimates for adults and are not medical advice.
 
 ## Food data and barcodes
 
-Search and barcode lookups call the Open Food Facts API directly from the browser; nothing else leaves the device. Search is rate-limited by Open Food Facts to roughly 10 requests a minute, so Hibi only searches when you submit. Food data is available under the Open Database License.
+Barcode lookups call the Open Food Facts API directly from the browser (data under the Open Database License). Text search goes through the `food-search` function, which sends only the search words to Gemini and caches each answer for 30 days, so repeat searches are instant and use no quota. Open Food Facts' own search was dropped: it is rate-limited, often unavailable, and has few Indian home-cooked dishes.
 
 Barcode scanning uses the browser's built-in `BarcodeDetector` where it supports retail barcodes (Chrome on Android). Elsewhere, including iOS Safari, a ZXing WebAssembly decoder is loaded on demand from the app's own origin. The camera requires HTTPS; a typed barcode number always works as a fallback.
 
@@ -53,11 +54,12 @@ Open the local address shown by Vite. On a phone, use the browser's **Add to Hom
 
 ## Server functions
 
-Hibi is still a static, offline-first app; three small Netlify Functions add the online features:
+Hibi is still a static, offline-first app; four small Netlify Functions add the online features:
 
 | Function | Route | Purpose |
 | --- | --- | --- |
-| `analyze-meal` | `GET/POST /api/analyze-meal` | Sends a resized meal photo to Gemini (`gemini-3.8-flash`, JSON-schema output) or Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Requires an access code; capped per code per day. `GET` reports which service is configured so the app can tell users where photos go. |
+| `analyze-meal` | `GET/POST /api/analyze-meal` | Sends a resized meal photo to Gemini (`gemini-3.8-flash`, JSON-schema output) or Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Capped per visitor (IP) per day; falls back to `gemini-3.5-flash` when Google reports high demand. `GET` reports which service is configured so the app can tell users where photos go. |
+| `food-search` | `GET /api/food-search?q=` | Asks Gemini (`gemini-3.5-flash`, falling back to `gemini-3.5-flash-lite`) for up to 6 matching foods with kcal and protein per 100 g and a typical serving. Answers are cached in Netlify Blobs for 30 days; new searches are capped per visitor per day. |
 | `reminders` | `GET/PUT/DELETE /api/reminders` | Stores a device's push subscription, time zone and reminder schedule in Netlify Blobs. |
 | `send-reminders` | scheduled, every 5 minutes | Sends reminders that fell due since the last run, in each device's own time zone. |
 
@@ -71,23 +73,18 @@ Run once after linking the repo to a Netlify site (`npx netlify-cli login`, `npx
 npm run setup:netlify
 ```
 
-It generates push (VAPID) keys and an access code (keeping existing ones on re-runs), asks for a Gemini API key and optionally an Anthropic key with hidden input, saves them as Netlify environment variables, and starts a fresh deploy.
+It generates push (VAPID) keys (keeping existing ones on re-runs), asks for a Gemini API key and optionally an Anthropic key with hidden input, saves them as Netlify environment variables, and starts a fresh deploy.
 
-To let a friend use photo estimates, give them the site link and their own code:
-
-```bash
-npm run access-code:add
-```
-
-Each code has its own daily limit. To revoke one, remove it from `HIBI_ACCESS_CODE` in the Netlify dashboard. Everyone's food logs stay on their own device; reminders work for anyone without a code.
+Anyone with the link can use search and photo estimates, within a daily allowance per visitor, so one person can't use up the free Gemini quota. Keep the Gemini key on Google's free tier (no billing account), so heavy use can only hit the quota, never a bill. Everyone's food logs stay on their own device.
 
 | Variable | Used for |
 | --- | --- |
-| `GEMINI_API_KEY` | Photo estimates with Gemini (free tier from Google AI Studio; Google may use free-tier content to improve its products, which the app discloses) |
-| `GEMINI_MODEL` | Optional, default `gemini-3.8-flash` |
-| `ANTHROPIC_API_KEY` | Optional paid alternative; used when no Gemini key is set |
-| `HIBI_ACCESS_CODE` | Comma-separated access codes required to request photo estimates, so the public site can't use up your quota |
-| `HIBI_DAILY_PHOTO_LIMIT` | Optional, default 40 per access code per day |
+| `GEMINI_API_KEY` | Food search and photo estimates with Gemini (free tier from Google AI Studio; Google may use free-tier content to improve its products, which the app discloses) |
+| `GEMINI_MODEL` | Optional first choice for photos, default `gemini-3.8-flash` |
+| `GEMINI_SEARCH_MODEL` | Optional first choice for search, default `gemini-3.5-flash` |
+| `ANTHROPIC_API_KEY` | Optional paid alternative for photos; used when no Gemini key is set |
+| `HIBI_DAILY_PHOTO_LIMIT` | Optional, default 40 photo estimates per visitor per day |
+| `HIBI_DAILY_SEARCH_LIMIT` | Optional, default 150 new (uncached) searches per visitor per day |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Signing push notifications |
 
 Push notifications work in Chrome/Edge/Firefox and, on iPhone, once Hibi is added to the Home Screen (iOS 16.4+).
@@ -98,7 +95,7 @@ Push notifications work in Chrome/Edge/Firefox and, on iPhone, once Hibi is adde
 npm test
 ```
 
-Unit tests cover the health formulas, streaks, date helpers, backup validation, the Open Food Facts client, the reminder scheduler (time zones, DST, lookback cap), and the server functions with in-memory Blobs.
+Unit tests cover the health formulas, streaks, date helpers, backup validation, the food search and Open Food Facts clients, the reminder scheduler (time zones, DST, lookback cap), and the server functions with in-memory Blobs.
 
 ## Production build
 
@@ -128,7 +125,7 @@ The manifest ships PNG icons (192/512, plus maskable variants), an Apple touch i
 
 ## Data and privacy
 
-Hibi stores entries in browser local storage. Only these leave the device: food search and barcode lookups (Open Food Facts), meal photos you choose to analyze (sent to Claude through the `analyze-meal` function, not stored), and reminder schedules if you turn reminders on. Browser data can be cleared by the operating system or user, so the Settings screen provides backup export/import from the first release.
+Hibi stores entries in browser local storage. Only these leave the device: search words (sent to Gemini through the `food-search` function), barcode lookups (Open Food Facts), meal photos you choose to analyze (sent to Gemini or Claude through the `analyze-meal` function, not stored), and reminder schedules if you turn reminders on. Browser data can be cleared by the operating system or user, so the Settings screen provides backup export/import from the first release.
 
 ## Later Android path
 

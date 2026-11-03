@@ -9,11 +9,7 @@ If the person's note gives quantities or ingredients, trust it over what you see
 export const userText = (hint: string) => (hint ? `My note about this meal: ${hint}` : 'Estimate this meal.')
 
 /** Thrown by a vision provider with the HTTP status and message the app should see. */
-export class VisionError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message)
-  }
-}
+export { AiError as VisionError } from './http'
 
 export interface VisionInput {
   image: string
