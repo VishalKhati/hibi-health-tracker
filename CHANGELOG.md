@@ -4,6 +4,23 @@ The version shown in Settings → About comes from `package.json`. To release, r
 `npm version minor` (new features) or `npm version patch` (fixes), add a section here, and push
 with `git push --follow-tags`.
 
+## v2.3 — 2026-11-03
+
+- Carbs, fat and fibre alongside calories and protein. Search, barcode, photo estimates and
+  "New" entries all fill them in (optional for manual entries), and photo items rescale them
+  when you change the grams.
+- Food screen: a "Today’s breakdown" panel with grams of protein, carbs, fat and fibre, and how
+  your calories split between protein, carbs and fat. Each food row lists its carbs and fat.
+- Foods logged before this version keep only calories and protein; the breakdown says so when
+  they make the day's totals partial.
+- Barcodes that aren't found can be added by photographing the pack's nutrition label. Gemini
+  reads the per-100 g values that Indian labels must print (FSSAI Labelling and Display
+  Regulations, 2020), and you check them before using them. "Read a label" also works for packs
+  without a barcode.
+- Scanned products are remembered on the device, so a repeat scan is instant and works offline.
+  Products added from labels can be shared, so other Hibi users' scans find them too. Scans
+  check this device, then shared products, then Open Food Facts.
+
 ## v2.2 — 2026-11-03
 
 - Food search now works for Indian food. Searching "roti" or "paneer butter masala" returns cooked-food

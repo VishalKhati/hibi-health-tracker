@@ -33,6 +33,8 @@ vi.mock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotificati
 
 const { default: analyzeMeal } = await import('../analyze-meal.mts')
 const { default: foodSearch } = await import('../food-search.mts')
+const { default: readLabel } = await import('../read-label.mts')
+const { default: products } = await import('../products.mts')
 const { default: reminders } = await import('../reminders.mts')
 const { default: sendReminders } = await import('../send-reminders.mts')
 
@@ -88,7 +90,7 @@ describe('analyze-meal', () => {
 })
 
 describe('analyze-meal with Gemini', () => {
-  const estimate = { items: [{ name: 'Poha', portion: '1 plate (~200 g)', grams: 200.4, calories: 250.6, protein: 5.04, confidence: 'high', note: ' ' }], summary: ' Poha. ' }
+  const estimate = { items: [{ name: 'Poha', portion: '1 plate (~200 g)', grams: 200.4, calories: 250.6, protein: 5.04, carbs: 44.36, fat: 6.04, fiber: 2.01, confidence: 'high', note: ' ' }], summary: ' Poha. ' }
   beforeEach(() => {
     vi.stubEnv('HIBI_MOCK_AI', '')
     vi.stubEnv('GEMINI_API_KEY', 'g-key')
@@ -97,7 +99,7 @@ describe('analyze-meal with Gemini', () => {
   it('sends the photo with the shared prompt and returns a tidied estimate', async () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(estimate) })
     const response = await post({ ...photo, hint: '  extra peanuts ' })
-    expect(await response.json()).toEqual({ summary: 'Poha.', items: [{ ...estimate.items[0], grams: 200, calories: 251, protein: 5, note: '' }] })
+    expect(await response.json()).toEqual({ summary: 'Poha.', items: [{ ...estimate.items[0], grams: 200, calories: 251, protein: 5, carbs: 44.4, fat: 6, fiber: 2, note: '' }] })
     const request = generateContent.mock.calls[0][0]
     expect(request.model).toBe('gemini-3.8-flash')
     expect(request.contents[0].parts[0]).toEqual({ inlineData: { mimeType: 'image/jpeg', data: photo.image } })
@@ -132,9 +134,9 @@ describe('analyze-meal with Gemini', () => {
 
 describe('food-search', () => {
   const foods = { foods: [
-    { name: ' Plain roti ', detail: 'Whole wheat, no oil ', kcalPer100g: 247.4, proteinPer100g: 8.24, servingLabel: '1 medium roti', servingGrams: 35.2 },
-    { name: 'plain roti', detail: 'duplicate', kcalPer100g: 250, proteinPer100g: 8, servingLabel: '1 roti', servingGrams: 35 },
-    { name: 'Water', detail: 'No energy', kcalPer100g: 0, proteinPer100g: 0, servingLabel: '1 glass', servingGrams: 250 },
+    { name: ' Plain roti ', detail: 'Whole wheat, no oil ', kcalPer100g: 247.4, proteinPer100g: 8.24, carbsPer100g: 46.04, fatPer100g: 1.46, fiberPer100g: 6.5, servingLabel: '1 medium roti', servingGrams: 35.2 },
+    { name: 'plain roti', detail: 'duplicate', kcalPer100g: 250, proteinPer100g: 8, carbsPer100g: 46, fatPer100g: 1, fiberPer100g: 6, servingLabel: '1 roti', servingGrams: 35 },
+    { name: 'Water', detail: 'No energy', kcalPer100g: 0, proteinPer100g: 0, carbsPer100g: 0, fatPer100g: 0, fiberPer100g: 0, servingLabel: '1 glass', servingGrams: 250 },
   ] }
   beforeEach(() => {
     vi.stubEnv('HIBI_MOCK_AI', '')
@@ -149,7 +151,7 @@ describe('food-search', () => {
   it('returns tidied reference values and caches them for the next person', async () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(foods) })
     const first = await (await search('Roti')).json()
-    expect(first).toEqual({ foods: [{ name: 'Plain roti', detail: 'Whole wheat, no oil', kcalPer100g: 247, proteinPer100g: 8.2, servingLabel: '1 medium roti', servingGrams: 35 }] })
+    expect(first).toEqual({ foods: [{ name: 'Plain roti', detail: 'Whole wheat, no oil', kcalPer100g: 247, proteinPer100g: 8.2, carbsPer100g: 46, fatPer100g: 1.5, fiberPer100g: 6.5, servingLabel: '1 medium roti', servingGrams: 35 }] })
     const request = generateContent.mock.calls[0][0]
     expect(request.model).toBe('gemini-3.5-flash')
     expect(request.config.systemInstruction).toContain('IFCT 2017')
@@ -170,6 +172,46 @@ describe('food-search', () => {
   it('reports a missing key', async () => {
     vi.stubEnv('GEMINI_API_KEY', '')
     expect((await search('dal')).status).toBe(503)
+  })
+})
+
+describe('read-label', () => {
+  const label = (body: unknown) => readLabel(new Request('https://hibi.test/api/read-label', { method: 'POST', body: JSON.stringify(body) }), { ip: '203.0.113.7' } as never)
+  const reading = { readable: true, name: ' Masala oats ', brand: 'Saffola', unit: 'g', kcalPer100: 380, proteinPer100: 10.5, carbsPer100: 66, fatPer100: 8.2, fiberPer100: null, servingSize: 40, note: '' }
+
+  it('validates the photo first', async () => {
+    expect((await label({ ...photo, mediaType: 'image/gif' })).status).toBe(400)
+    expect((await label({ ...photo, image: '' })).status).toBe(413)
+  })
+
+  it('reads the per-100 g values with Gemini, keeping a missing fibre as null', async () => {
+    vi.stubEnv('HIBI_MOCK_AI', '')
+    vi.stubEnv('GEMINI_API_KEY', 'g-key')
+    generateContent.mockResolvedValue({ text: JSON.stringify(reading) })
+    const body = await (await label(photo)).json()
+    expect(body).toEqual({ ...reading, name: 'Masala oats' })
+    const request = generateContent.mock.calls[0][0]
+    expect(request.model).toBe('gemini-3.5-flash-lite')
+    expect(request.config.systemInstruction).toContain('per 100 g')
+  })
+})
+
+describe('shared products', () => {
+  const call = (method: string, code: string, body?: unknown, ip = '203.0.113.7') =>
+    products(new Request(`https://hibi.test/api/products/${code}`, { method, body: body ? JSON.stringify(body) : undefined }), { ip, params: { code } } as never)
+  const oats = { name: 'Masala oats', brand: 'Saffola', kcalPer100g: 380, proteinPer100g: 10.5, carbsPer100g: 66, fatPer100g: 8.2, servingGrams: 40, servingLabel: '40 g' }
+
+  it('stores a confirmed product and serves it to the next scan', async () => {
+    expect((await call('GET', '8901234567890')).status).toBe(404)
+    expect((await call('PUT', '8901234567890', oats)).status).toBe(200)
+    const { product } = await (await call('GET', '8901234567890', undefined, '198.51.100.9')).json() as { product: Record<string, unknown> }
+    expect(product).toMatchObject(oats)
+  })
+
+  it('rejects bad barcodes and impossible values', async () => {
+    expect((await call('GET', 'abc')).status).toBe(400)
+    expect((await call('PUT', '8901234567890', { ...oats, kcalPer100g: 5000 })).status).toBe(400)
+    expect((await call('PUT', '8901234567890', { ...oats, name: ' ' })).status).toBe(400)
   })
 })
 

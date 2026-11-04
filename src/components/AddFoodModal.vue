@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
-import { ArrowLeft, BookmarkPlus, LoaderCircle, Plus, ScanBarcode, Search } from 'lucide-vue-next'
+import { ArrowLeft, BookmarkPlus, LoaderCircle, Plus, ScanBarcode, ScanText, Search } from 'lucide-vue-next'
 import BaseModal from './BaseModal.vue'
 import BarcodeScanner from './BarcodeScanner.vue'
 import PhotoMeal from './PhotoMeal.vue'
+import MacroBar from './MacroBar.vue'
+import LabelReader from './LabelReader.vue'
 import { useHealthStore } from '../stores/health'
 import { FoodLookupError, lookupBarcode, nutritionFor, type FoodProduct } from '../services/openFoodFacts'
 import { searchFoods } from '../services/foodSearch'
+import { findSharedProduct, shareProduct } from '../services/products'
 import type { FoodEntry } from '../types'
 
 const props = withDefaults(defineProps<{ initialMeal?: FoodEntry['meal'] }>(), { initialMeal: 'Breakfast' })
@@ -14,7 +17,9 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const store = useHealthStore()
 const mode = ref<'saved' | 'search' | 'photo' | 'custom'>('saved')
 const meal = ref<FoodEntry['meal']>(props.initialMeal)
-const form = reactive({ name: '', portion: '', calories: 0, protein: 0, save: true })
+/** Carbs, fat and fibre are optional; an empty field means "not known", not zero. */
+const form = reactive({ name: '', portion: '', calories: 0, protein: 0, carbs: '' as number | '', fat: '' as number | '', fiber: '' as number | '', save: true })
+const optional = (value: number | '') => (typeof value === 'number' && Number.isFinite(value) ? value : undefined)
 
 const useSaved = (food: (typeof store.data.savedFoods)[number]) => {
   store.addSavedFood(food, meal.value)
@@ -22,7 +27,7 @@ const useSaved = (food: (typeof store.data.savedFoods)[number]) => {
 }
 const submit = () => {
   if (!form.name.trim() || form.calories < 0) return
-  store.addFood({ date: store.selectedDate.value, name: form.name.trim(), meal: meal.value, portion: form.portion || '1 serving', calories: form.calories, protein: form.protein }, form.save)
+  store.addFood({ date: store.selectedDate.value, name: form.name.trim(), meal: meal.value, portion: form.portion || '1 serving', calories: form.calories, protein: form.protein, carbs: optional(form.carbs), fat: optional(form.fat), fiber: optional(form.fiber) }, form.save)
   emit('saved')
 }
 
@@ -31,6 +36,9 @@ const results = ref<FoodProduct[] | null>(null)
 const loading = ref(false)
 const lookupError = ref('')
 const scanning = ref(false)
+/** Barcode whose label is being read ('' for a pack without one); null when not reading. */
+const labelFor = ref<string | null>(null)
+const missingCode = ref('')
 const selected = ref<FoodProduct | null>(null)
 const grams = ref(100)
 const saveProduct = ref(true)
@@ -65,14 +73,35 @@ const choose = (product: FoodProduct) => {
   grams.value = product.servingGrams ?? 100
 }
 
+/** This device first (works offline), then products other Hibi users added, then Open Food Facts. */
 const onDetected = async (code: string) => {
   scanning.value = false
-  const product = await lookup((signal) => lookupBarcode(code, signal))
+  missingCode.value = ''
+  const known = store.productFor(code)
+  if (known) return choose(known)
+  const product = await lookup(async (signal) => (await findSharedProduct(code, signal)) ?? (await lookupBarcode(code, signal)))
   if (product) choose(product)
-  else if (product === null) lookupError.value = `No product found for barcode ${code}. You can add it under “New food”.`
+  else if (product === null) {
+    missingCode.value = code
+    labelFor.value = code
+  }
 }
 
-const portion = computed(() => (selected.value ? nutritionFor(selected.value, grams.value || 0) : { calories: 0, protein: 0 }))
+const readLabelFor = (code: string) => {
+  lookupError.value = ''
+  missingCode.value = ''
+  labelFor.value = code
+}
+
+const onLabel = (product: FoodProduct, share: boolean) => {
+  labelFor.value = null
+  missingCode.value = ''
+  store.rememberProduct(product)
+  if (share) void shareProduct(product)
+  choose(product)
+}
+
+const portion = computed(() => (selected.value ? nutritionFor(selected.value, grams.value || 0) : { calories: 0, protein: 0 } as ReturnType<typeof nutritionFor>))
 /** Search results name their serving ("1 medium roti"); product labels only give a weight. */
 const servingName = computed(() => (selected.value?.estimated && selected.value.servingLabel) || '1 serving')
 /** 1 or 2 servings when the amount matches one, so "2 rotis" is one tap. */
@@ -93,10 +122,10 @@ const addProduct = () => {
     name: product.brand ? `${product.name} (${product.brand})` : product.name,
     meal: meal.value,
     portion: portionLabel.value,
-    calories: portion.value.calories,
-    protein: portion.value.protein,
+    ...portion.value,
     barcode: product.barcode || undefined,
   }, saveProduct.value)
+  if (product.barcode && !product.estimated) store.rememberProduct(product)
   emit('saved')
 }
 </script>
@@ -115,7 +144,7 @@ const addProduct = () => {
       <button v-for="food in store.data.savedFoods" :key="food.id" class="saved-food" @click="useSaved(food)">
         <span class="saved-plus"><Plus :size="17" /></span>
         <strong>{{ food.name }}</strong><small>{{ food.portion }}</small>
-        <span>{{ food.calories }} kcal · {{ food.protein }}g</span>
+        <span>{{ food.calories }} kcal · {{ food.protein }}g protein<template v-if="food.carbs !== undefined"><br>{{ food.carbs }}g carbs · {{ food.fat ?? 0 }}g fat</template></span>
       </button>
       <button class="saved-food add-new" @click="mode = 'search'"><span class="saved-plus"><Search :size="16" /></span><strong>Find a food</strong><small>Search or scan a barcode</small></button>
     </div>
@@ -139,10 +168,17 @@ const addProduct = () => {
           <div><strong>{{ portion.calories }}</strong><span>kcal</span></div>
           <div><strong>{{ portion.protein }}g</strong><span>protein</span></div>
         </div>
+        <MacroBar v-if="portion.carbs !== undefined || portion.fat !== undefined" :protein="portion.protein" :carbs="portion.carbs" :fat="portion.fat" :fiber="portion.fiber" />
+        <p v-else class="data-credit">This product’s label doesn’t list carbs or fat.</p>
         <p v-if="selected.estimated" class="data-credit">Typical values for this dish. Home recipes vary, so adjust the amount if yours is bigger or richer.</p>
         <label class="check-row"><input v-model="saveProduct" type="checkbox" /><BookmarkPlus :size="18" /><span>Save for quick logging</span></label>
         <button class="primary-button" type="submit" :disabled="!(grams > 0)">Add to {{ meal.toLowerCase() }}</button>
       </form>
+
+      <template v-else-if="labelFor !== null">
+        <p v-if="missingCode" class="lookup-status">Barcode {{ missingCode }} isn’t in Hibi or Open Food Facts yet. Read its label once and Hibi will remember it.</p>
+        <LabelReader :barcode="labelFor || undefined" @done="onLabel" @cancel="labelFor = null; missingCode = ''" />
+      </template>
 
       <template v-else-if="scanning">
         <BarcodeScanner @detected="onDetected" />
@@ -154,7 +190,10 @@ const addProduct = () => {
           <input v-model="query" type="search" enterkeyhint="search" placeholder="e.g. roti, paneer butter masala, Amul milk" aria-label="Search foods" />
           <button class="primary-button" type="submit" :disabled="loading || query.trim().length < 2" aria-label="Search"><Search :size="18" /></button>
         </form>
-        <button type="button" class="secondary-button wide" @click="lookupError = ''; scanning = true"><ScanBarcode :size="18" /> Scan a barcode</button>
+        <div class="scan-actions">
+          <button type="button" class="secondary-button" @click="lookupError = ''; scanning = true"><ScanBarcode :size="18" /> Scan barcode</button>
+          <button type="button" class="secondary-button" @click="readLabelFor('')"><ScanText :size="18" /> Read a label</button>
+        </div>
         <p v-if="loading" class="lookup-status"><LoaderCircle :size="16" class="spin" /> Looking it up… usually a few seconds</p>
         <p v-else-if="lookupError" class="inline-alert" role="alert">{{ lookupError }}</p>
         <p v-else-if="results && !results.length" class="lookup-status">No matches. Try different words, or add it under “New”.</p>
@@ -165,7 +204,7 @@ const addProduct = () => {
             <span v-else class="result-values"><strong>{{ Math.round(product.kcalPer100g) }}</strong> kcal<small>per 100 g</small></span>
           </button>
         </div>
-        <p class="data-credit">Search results are estimates from Google Gemini, based on Indian (IFCT 2017, NIN) and USDA reference values. Barcode data comes from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (ODbL).</p>
+        <p class="data-credit">Search results are estimates from Google Gemini, based on Indian (IFCT 2017, NIN) and USDA reference values. Barcodes are looked up in products Hibi users added from their labels, then <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (ODbL).</p>
       </template>
     </div>
 
@@ -177,6 +216,11 @@ const addProduct = () => {
       <div class="field-row">
         <label class="field"><span>Calories</span><input v-model.number="form.calories" type="number" min="0" required inputmode="numeric" /></label>
         <label class="field"><span>Protein (g)</span><input v-model.number="form.protein" type="number" min="0" inputmode="decimal" /></label>
+      </div>
+      <div class="field-row three">
+        <label class="field"><span>Carbs (g)</span><input v-model.number="form.carbs" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Optional" /></label>
+        <label class="field"><span>Fat (g)</span><input v-model.number="form.fat" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Optional" /></label>
+        <label class="field"><span>Fibre (g)</span><input v-model.number="form.fiber" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Optional" /></label>
       </div>
       <label class="check-row"><input v-model="form.save" type="checkbox" /><BookmarkPlus :size="18" /><span>Save for quick logging</span></label>
       <button class="primary-button" type="submit">Add to {{ meal.toLowerCase() }}</button>

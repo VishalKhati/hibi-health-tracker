@@ -39,7 +39,7 @@ These are population estimates for adults and are not medical advice.
 
 ## Food data and barcodes
 
-Barcode lookups call the Open Food Facts API directly from the browser (data under the Open Database License). Text search goes through the `food-search` function, which sends only the search words to Gemini and caches each answer for 30 days, so repeat searches are instant and use no quota. Open Food Facts' own search was dropped: it is rate-limited, often unavailable, and has few Indian home-cooked dishes.
+Barcode scans check products remembered on the device, then products Hibi users added from labels (`products` function), then the Open Food Facts API (data under the Open Database License). When none has the product, Hibi offers to read the pack's nutrition label from a photo. Text search goes through the `food-search` function, which sends only the search words to Gemini and caches each answer for 30 days, so repeat searches are instant and use no quota. Open Food Facts' own search was dropped: it is rate-limited, often unavailable, and has few Indian home-cooked dishes.
 
 Barcode scanning uses the browser's built-in `BarcodeDetector` where it supports retail barcodes (Chrome on Android). Elsewhere, including iOS Safari, a ZXing WebAssembly decoder is loaded on demand from the app's own origin. The camera requires HTTPS; a typed barcode number always works as a fallback.
 
@@ -54,12 +54,14 @@ Open the local address shown by Vite. On a phone, use the browser's **Add to Hom
 
 ## Server functions
 
-Hibi is still a static, offline-first app; four small Netlify Functions add the online features:
+Hibi is still a static, offline-first app; six small Netlify Functions add the online features:
 
 | Function | Route | Purpose |
 | --- | --- | --- |
 | `analyze-meal` | `GET/POST /api/analyze-meal` | Sends a resized meal photo to Gemini (`gemini-3.8-flash`, JSON-schema output) or Claude (`claude-opus-5-5`, structured output) and returns an editable list of foods. Capped per visitor (IP) per day; falls back to `gemini-3.5-flash` when Google reports high demand. `GET` reports which service is configured so the app can tell users where photos go. |
 | `food-search` | `GET /api/food-search?q=` | Asks Gemini (`gemini-3.5-flash`, falling back to `gemini-3.5-flash-lite`) for up to 6 matching foods with kcal and protein per 100 g and a typical serving. Answers are cached in Netlify Blobs for 30 days; new searches are capped per visitor per day. |
+| `read-label` | `POST /api/read-label` | Reads the per-100 g values off a photo of a pack's nutrition table with Gemini (`gemini-3.5-flash-lite`, falling back to `gemini-3.5-flash`). The person checks every value before it's used. Capped per visitor per day. |
+| `products` | `GET/PUT /api/products/:code` | Products people confirmed from their labels, shared by barcode in Netlify Blobs so the next scan finds them. Values are validated; writes are capped per visitor per day. |
 | `reminders` | `GET/PUT/DELETE /api/reminders` | Stores a device's push subscription, time zone and reminder schedule in Netlify Blobs. |
 | `send-reminders` | scheduled, every 5 minutes | Sends reminders that fell due since the last run, in each device's own time zone. |
 

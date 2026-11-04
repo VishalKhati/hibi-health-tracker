@@ -17,10 +17,11 @@ export const defaults = (): HibiData => ({
   preferences: { theme: 'system', reminders: defaultReminders() },
   foods: [],
   savedFoods: [
-    { id: uid(), name: 'Banana', portion: '1 medium', calories: 105, protein: 1 },
-    { id: uid(), name: 'Greek yogurt', portion: '1 cup', calories: 130, protein: 17 },
-    { id: uid(), name: 'Eggs', portion: '2 large', calories: 144, protein: 13 },
+    { id: uid(), name: 'Banana', portion: '1 medium', calories: 105, protein: 1, carbs: 27, fat: 0.4, fiber: 3.1 },
+    { id: uid(), name: 'Greek yogurt', portion: '1 cup', calories: 130, protein: 17, carbs: 8, fat: 1, fiber: 0 },
+    { id: uid(), name: 'Eggs', portion: '2 large', calories: 144, protein: 13, carbs: 1, fat: 10, fiber: 0 },
   ],
+  products: [],
   activities: [],
   supplements: [],
   doseLogs: [],
@@ -28,7 +29,7 @@ export const defaults = (): HibiData => ({
   weights: [],
 })
 
-const LISTS = ['foods', 'savedFoods', 'activities', 'supplements', 'doseLogs', 'dayLogs', 'weights'] as const
+const LISTS = ['foods', 'savedFoods', 'products', 'activities', 'supplements', 'doseLogs', 'dayLogs', 'weights'] as const
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const normalizePreferences = (raw: unknown, base: HibiData['preferences']): HibiData['preferences'] => {

@@ -676,3 +676,25 @@ button:disabled { opacity: .36; cursor: default; }
 
 /* Hide the "Powered by Netlify" badge that Netlify injects into the served page. */
 #nl-badge-frame { display: none !important; }
+
+/* Macro breakdown: calorie split bar (protein, carbs, fat) with grams and fibre below. */
+.macro-bar { display: grid; gap: 10px; }
+.macro-split { display: flex; height: 8px; overflow: hidden; border-radius: 99px; background: var(--surface-sunken); }
+.macro-split span { height: 100%; }
+.macro-protein { background: var(--sage); }
+.macro-carbs { background: var(--peach); }
+.macro-fat { background: var(--violet-text); }
+.macro-fiber { background: var(--line-strong); }
+.macro-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.macro-values div { min-width: 0; }
+.macro-values dt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.macro-values dd { margin: 3px 0 0; font-size: 14px; font-weight: 700; }
+.macro-values dd small { margin-left: 4px; color: var(--muted); font-size: 10px; font-weight: 600; }
+.macro-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.macro-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.macro-panel { padding: 18px 20px; margin-bottom: 22px; }
+.macro-panel h2 { margin: 0 0 12px; font-size: 13px; }
+
+.scan-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.label-reader { display: grid; gap: 12px; }
+.label-reader .link-button { justify-self: center; }

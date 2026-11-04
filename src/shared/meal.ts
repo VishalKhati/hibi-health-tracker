@@ -10,6 +10,9 @@ export const MealItemSchema = z.object({
   grams: z.number().describe('Estimated weight in grams (millilitres for drinks).'),
   calories: z.number().describe('Estimated kilocalories for this portion.'),
   protein: z.number().describe('Estimated protein in grams for this portion.'),
+  carbs: z.number().describe('Estimated total carbohydrate in grams for this portion.'),
+  fat: z.number().describe('Estimated total fat in grams for this portion.'),
+  fiber: z.number().describe('Estimated dietary fibre in grams for this portion.'),
   confidence: z.enum(['low', 'medium', 'high']).describe('How sure the identification and portion estimate are.'),
   note: z.string().describe('What was assumed (oil, ingredients, hidden parts), or an empty string.'),
 })

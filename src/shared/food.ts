@@ -9,6 +9,9 @@ export const FoodMatchSchema = z.object({
   detail: z.string().describe('How it is prepared or what it is, in under 10 words.'),
   kcalPer100g: z.number().describe('Kilocalories per 100 g (100 ml for drinks) as eaten.'),
   proteinPer100g: z.number().describe('Protein in grams per 100 g (100 ml for drinks) as eaten.'),
+  carbsPer100g: z.number().describe('Total carbohydrate in grams per 100 g as eaten.'),
+  fatPer100g: z.number().describe('Total fat in grams per 100 g as eaten.'),
+  fiberPer100g: z.number().describe('Dietary fibre in grams per 100 g as eaten.'),
   servingLabel: z.string().describe('One typical household serving, e.g. "1 medium roti", "1 katori", "1 glass".'),
   servingGrams: z.number().describe('Weight of that serving in grams (millilitres for drinks).'),
 })

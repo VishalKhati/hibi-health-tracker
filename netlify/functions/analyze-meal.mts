@@ -18,9 +18,9 @@ const provider = () => (process.env.HIBI_MOCK_AI === '1' ? 'mock' : process.env.
 /** Local QA only: set HIBI_MOCK_AI=1 to exercise the flow without calling a model. */
 const MOCK: MealAnalysis = {
   items: [
-    { name: 'Rajma', portion: '1 katori (~150 g)', grams: 150, calories: 210, protein: 11, confidence: 'medium', note: 'Assumed home-style with a little oil.' },
-    { name: 'Steamed rice', portion: '1 cup (~160 g)', grams: 160, calories: 205, protein: 4, confidence: 'high', note: '' },
-    { name: 'Cucumber salad', portion: 'A few slices (~50 g)', grams: 50, calories: 8, protein: 0.3, confidence: 'low', note: 'Partly hidden behind the bowl.' },
+    { name: 'Rajma', portion: '1 katori (~150 g)', grams: 150, calories: 210, protein: 11, carbs: 28, fat: 6, fiber: 8, confidence: 'medium', note: 'Assumed home-style with a little oil.' },
+    { name: 'Steamed rice', portion: '1 cup (~160 g)', grams: 160, calories: 205, protein: 4, carbs: 45, fat: 0.4, fiber: 0.6, confidence: 'high', note: '' },
+    { name: 'Cucumber salad', portion: 'A few slices (~50 g)', grams: 50, calories: 8, protein: 0.3, carbs: 1.8, fat: 0.1, fiber: 0.3, confidence: 'low', note: 'Partly hidden behind the bowl.' },
   ],
   summary: 'Rajma chawal with a small salad.',
 }
@@ -35,6 +35,9 @@ const tidy = (analysis: MealAnalysis): MealAnalysis => ({
     grams: Math.max(0, Math.round(item.grams)),
     calories: Math.max(0, Math.round(item.calories)),
     protein: Math.max(0, Math.round(item.protein * 10) / 10),
+    carbs: Math.max(0, Math.round(item.carbs * 10) / 10),
+    fat: Math.max(0, Math.round(item.fat * 10) / 10),
+    fiber: Math.max(0, Math.round(item.fiber * 10) / 10),
   })),
 })
 

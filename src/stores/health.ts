@@ -1,9 +1,10 @@
 import { computed, reactive, watch } from 'vue'
-import type { ActivityEntry, DayLog, DoseLog, FoodEntry, HibiData, SavedFood, Supplement, WeightEntry } from '../types'
+import type { ActivityEntry, DayLog, DoseLog, FoodEntry, HibiData, KnownProduct, SavedFood, Supplement, WeightEntry } from '../types'
 import { dateKey, pastDays } from '../utils/date'
 import { bodyMetrics as calculateBodyMetrics, estimateActivityCalories } from '../utils/health'
 import { bestStreak, currentStreak, type DayResult } from '../utils/streaks'
 import { defaults, normalize, uid } from './normalize'
+import { pickMacros, round1 } from '../utils/macros'
 
 const STORAGE_KEY = 'hibi-health-data-v1'
 /** Mirrored outside the main blob so index.html can apply the theme before first paint. */
@@ -53,7 +54,12 @@ const dayStats = (date: string) => {
     date,
     foodsLogged: foods.length,
     calories: foods.reduce((sum, item) => sum + item.calories, 0),
-    protein: foods.reduce((sum, item) => sum + item.protein, 0),
+    protein: round1(foods.reduce((sum, item) => sum + item.protein, 0)),
+    carbs: round1(foods.reduce((sum, item) => sum + (item.carbs ?? 0), 0)),
+    fat: round1(foods.reduce((sum, item) => sum + (item.fat ?? 0), 0)),
+    fiber: round1(foods.reduce((sum, item) => sum + (item.fiber ?? 0), 0)),
+    /** Foods logged before the breakdown existed, so totals can say they're partial. */
+    foodsWithoutBreakdown: foods.filter((item) => item.carbs === undefined && item.fat === undefined).length,
     steps: log?.steps ?? 0,
     water: log?.water ?? 0,
     activityMinutes: activities.reduce((sum, item) => sum + item.duration, 0),
@@ -112,14 +118,25 @@ export const useHealthStore = () => {
   const scheduledSupplements = computed(() => data.supplements.filter((item) => item.days.includes(weekday(selectedDate.value))))
 
   const addFood = (entry: Omit<FoodEntry, 'id' | 'createdAt'>, save = false) => {
-    data.foods.push({ ...entry, id: uid(), createdAt: new Date().toISOString() })
+    data.foods.push({ ...entry, ...pickMacros(entry), id: uid(), createdAt: new Date().toISOString() })
     if (save && !data.savedFoods.some((item) => item.name.toLowerCase() === entry.name.toLowerCase())) {
-      data.savedFoods.push({ id: uid(), name: entry.name, portion: entry.portion, calories: entry.calories, protein: entry.protein, barcode: entry.barcode })
+      data.savedFoods.push({ id: uid(), name: entry.name, portion: entry.portion, calories: entry.calories, protein: entry.protein, ...pickMacros(entry), barcode: entry.barcode })
     }
   }
 
+  /** Remembers a barcode product (newest values win), so the next scan needs no lookup. */
+  const rememberProduct = (product: KnownProduct) => {
+    if (!product.barcode) return
+    const { barcode, name, brand, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, servingGrams, servingLabel } = product
+    const record: KnownProduct = JSON.parse(JSON.stringify({ barcode, name, brand, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, servingGrams, servingLabel }))
+    const index = data.products.findIndex((item) => item.barcode === barcode)
+    if (index >= 0) data.products.splice(index, 1, record)
+    else data.products.push(record)
+  }
+  const productFor = (barcode: string) => data.products.find((item) => item.barcode === barcode)
+
   const addSavedFood = (food: SavedFood, meal: FoodEntry['meal']) =>
-    addFood({ date: selectedDate.value, name: food.name, meal, portion: food.portion, calories: food.calories, protein: food.protein, barcode: food.barcode })
+    addFood({ date: selectedDate.value, name: food.name, meal, portion: food.portion, calories: food.calories, protein: food.protein, ...pickMacros(food), barcode: food.barcode })
 
   /** Leaves user-entered calories alone; fills an estimate only when the field was blank and a weight is known. */
   const addActivity = (entry: Omit<ActivityEntry, 'id' | 'createdAt' | 'caloriesEstimated'>) => {
@@ -191,6 +208,6 @@ export const useHealthStore = () => {
   return {
     data, selectedDate, foodsForDate, activitiesForDate, todayTotals, scheduledSupplements, week, dayStats,
     sortedWeights, latestWeight, bodyMetrics, streaks, earliestDate,
-    addFood, addSavedFood, addActivity, setDayValue, logWeight, removeWeight, addSupplement, logDose, doseStatus, remove, exportData, importData, resetData,
+    addFood, addSavedFood, addActivity, setDayValue, logWeight, removeWeight, addSupplement, logDose, doseStatus, remove, exportData, importData, resetData, rememberProduct, productFor,
   }
 }

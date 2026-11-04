@@ -2,7 +2,14 @@ import type { ReminderSettings } from '../shared/reminders'
 
 export type Screen = 'today' | 'food' | 'activity' | 'supplements' | 'body' | 'progress' | 'settings'
 
-export interface FoodEntry {
+/** Grams per entry. Optional: foods logged before v2.3 only have calories and protein. */
+export interface MacroBreakdown {
+  carbs?: number
+  fat?: number
+  fiber?: number
+}
+
+export interface FoodEntry extends MacroBreakdown {
   id: string
   date: string
   name: string
@@ -14,13 +21,28 @@ export interface FoodEntry {
   createdAt: string
 }
 
-export interface SavedFood {
+export interface SavedFood extends MacroBreakdown {
   id: string
   name: string
   portion: string
   calories: number
   protein: number
   barcode?: string
+}
+
+/** A packaged product's per-100 g values, remembered by barcode so a repeat scan works offline. */
+export interface KnownProduct {
+  barcode: string
+  name: string
+  brand: string
+  kcalPer100g: number
+  proteinPer100g: number
+  carbsPer100g?: number
+  fatPer100g?: number
+  fiberPer100g?: number
+  /** Grams in one labelled serving, when the label gives one. */
+  servingGrams?: number
+  servingLabel?: string
 }
 
 export interface ActivityEntry {
@@ -104,6 +126,7 @@ export interface HibiData {
   preferences: Preferences
   foods: FoodEntry[]
   savedFoods: SavedFood[]
+  products: KnownProduct[]
   activities: ActivityEntry[]
   supplements: Supplement[]
   doseLogs: DoseLog[]

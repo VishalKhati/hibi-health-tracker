@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Camera, Image as ImageIcon, LoaderCircle, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-vue-next'
+import MacroBar from './MacroBar.vue'
 import { useHealthStore } from '../stores/health'
 import { analyzeMeal, getPhotoProvider, prepareImage, type PhotoProvider } from '../services/mealPhoto'
 import type { MealItem } from '../shared/meal'
@@ -11,8 +12,10 @@ const emit = defineEmits<{ saved: [] }>()
 const store = useHealthStore()
 
 type Step = 'pick' | 'ready' | 'analyzing' | 'review'
-/** Per-gram rates let a grams edit rescale calories and protein without compounding rounding. */
-interface EditableItem extends MealItem { key: number; kcalPerGram: number; proteinPerGram: number }
+type Nutrient = 'calories' | 'protein' | 'carbs' | 'fat' | 'fiber'
+const NUTRIENTS: Nutrient[] = ['calories', 'protein', 'carbs', 'fat', 'fiber']
+/** Per-gram rates let a grams edit rescale every nutrient without compounding rounding. */
+interface EditableItem extends MealItem { key: number; perGram: Record<Nutrient, number> }
 
 const step = ref<Step>('pick')
 const photo = ref<Awaited<ReturnType<typeof prepareImage>> | null>(null)
@@ -37,9 +40,8 @@ const disclosure = computed(() => ({
 }[provider.value ?? 'unknown'] ?? ''))
 const unavailable = computed(() => provider.value === null)
 
-const rates = (item: Pick<MealItem, 'grams' | 'calories' | 'protein'>) => ({
-  kcalPerGram: item.grams > 0 ? item.calories / item.grams : 0,
-  proteinPerGram: item.grams > 0 ? item.protein / item.grams : 0,
+const rates = (item: MealItem) => ({
+  perGram: Object.fromEntries(NUTRIENTS.map((key) => [key, item.grams > 0 ? item[key] / item.grams : 0])) as Record<Nutrient, number>,
 })
 
 const onFile = async (event: Event) => {
@@ -89,24 +91,22 @@ const startOver = () => {
 
 const setGrams = (item: EditableItem, value: number) => {
   item.grams = Number.isFinite(value) && value > 0 ? value : 0
-  if (item.kcalPerGram || item.proteinPerGram) {
-    item.calories = Math.round(item.kcalPerGram * item.grams)
-    item.protein = Math.round(item.proteinPerGram * item.grams * 10) / 10
+  if (NUTRIENTS.some((key) => item.perGram[key])) {
+    item.calories = Math.round(item.perGram.calories * item.grams)
+    for (const key of ['protein', 'carbs', 'fat', 'fiber'] as const) item[key] = Math.round(item.perGram[key] * item.grams * 10) / 10
   }
 }
-/** A hand-corrected calorie or protein value becomes the new per-gram rate for later grams edits. */
-const setNutrient = (item: EditableItem, field: 'calories' | 'protein', value: number) => {
+/** A hand-corrected value becomes the new per-gram rate for later grams edits. */
+const setNutrient = (item: EditableItem, field: Nutrient, value: number) => {
   item[field] = Number.isFinite(value) && value > 0 ? value : 0
   Object.assign(item, rates(item))
 }
 
-const addItem = () => items.push({ key: nextKey++, name: '', portion: '', grams: 0, calories: 0, protein: 0, confidence: 'high', note: '', kcalPerGram: 0, proteinPerGram: 0 })
+const addItem = () => items.push({ key: nextKey++, name: '', portion: '', grams: 0, calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, confidence: 'high', note: '', ...rates({ grams: 0 } as MealItem) })
 
 const loggable = computed(() => items.filter((item) => item.name.trim()))
-const totals = computed(() => ({
-  calories: loggable.value.reduce((sum, item) => sum + item.calories, 0),
-  protein: Math.round(loggable.value.reduce((sum, item) => sum + item.protein, 0) * 10) / 10,
-}))
+const sum = (key: Nutrient) => Math.round(loggable.value.reduce((total, item) => total + item[key], 0) * 10) / 10
+const totals = computed(() => ({ calories: Math.round(sum('calories')), protein: sum('protein'), carbs: sum('carbs'), fat: sum('fat'), fiber: sum('fiber') }))
 
 const logAll = () => {
   for (const item of loggable.value) {
@@ -117,6 +117,9 @@ const logAll = () => {
       portion: item.portion.trim() || (item.grams ? `${item.grams} g` : '1 serving'),
       calories: Math.round(item.calories),
       protein: Math.round(item.protein * 10) / 10,
+      carbs: item.carbs,
+      fat: item.fat,
+      fiber: item.fiber,
     }, saveToQuick.value)
   }
   emit('saved')
@@ -172,6 +175,11 @@ const logAll = () => {
             <label><span>kcal</span><input :value="item.calories" type="number" min="0" inputmode="numeric" @input="setNutrient(item, 'calories', Number(($event.target as HTMLInputElement).value))" /></label>
             <label><span>Protein g</span><input :value="item.protein" type="number" min="0" step="0.1" inputmode="decimal" @input="setNutrient(item, 'protein', Number(($event.target as HTMLInputElement).value))" /></label>
           </div>
+          <div class="estimate-numbers">
+            <label><span>Carbs g</span><input :value="item.carbs" type="number" min="0" step="0.1" inputmode="decimal" @input="setNutrient(item, 'carbs', Number(($event.target as HTMLInputElement).value))" /></label>
+            <label><span>Fat g</span><input :value="item.fat" type="number" min="0" step="0.1" inputmode="decimal" @input="setNutrient(item, 'fat', Number(($event.target as HTMLInputElement).value))" /></label>
+            <label><span>Fibre g</span><input :value="item.fiber" type="number" min="0" step="0.1" inputmode="decimal" @input="setNutrient(item, 'fiber', Number(($event.target as HTMLInputElement).value))" /></label>
+          </div>
           <p v-if="item.confidence !== 'high' || item.note" class="estimate-note"><span v-if="item.confidence !== 'high'" class="confidence-pill">{{ item.confidence === 'low' ? 'Check this' : 'Rough estimate' }}</span>{{ item.note }}</p>
         </article>
       </div>
@@ -180,6 +188,7 @@ const logAll = () => {
         <div><strong>{{ totals.calories }}</strong><span>kcal total</span></div>
         <div><strong>{{ totals.protein }}g</strong><span>protein</span></div>
       </div>
+      <MacroBar :protein="totals.protein" :carbs="totals.carbs" :fat="totals.fat" :fiber="totals.fiber" />
       <label class="check-row"><input v-model="saveToQuick" type="checkbox" /><span>Also save these to quick foods</span></label>
       <div class="photo-buttons">
         <button class="secondary-button" type="button" @click="startOver"><RotateCcw :size="16" /> Start over</button>

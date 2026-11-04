@@ -15,6 +15,12 @@ describe('toFoodProduct', () => {
     })).toEqual({ barcode: '123', name: 'Greek yogurt', brand: 'Chobani', kcalPer100g: 59, proteinPer100g: 10.2, servingGrams: 170, servingLabel: '170 g' })
   })
 
+  it('reads carbs, fat and fibre when the label has them', () => {
+    const product = toFoodProduct({ product_name: 'Oats', nutriments: { 'energy-kcal_100g': 375, proteins_100g: 13.5, carbohydrates_100g: '66', fat_100g: 7, fiber_100g: 10 } })!
+    expect(product).toMatchObject({ carbsPer100g: 66, fatPer100g: 7, fiberPer100g: 10 })
+    expect(nutritionFor(product, 40)).toEqual({ calories: 150, protein: 5.4, carbs: 26.4, fat: 2.8, fiber: 4 })
+  })
+
   it('converts kilojoules when kcal are missing', () => {
     expect(toFoodProduct({ product_name: 'Oats', nutriments: { energy_100g: 1569 } })?.kcalPer100g).toBeCloseTo(375, 0)
   })
